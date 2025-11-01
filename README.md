@@ -72,7 +72,7 @@ K-Grandma recipe は、**材料ベースのAIおすすめ** と **見やすい�
   <img src="assets/ko/ko_home.png" alt="홈 화면" width="30%" />
   <img src="assets/ko/ko_recipe.png" alt="레시피 화면" width="30%" />
 </div>
-<p align="center"><sub>홈 · 재료 입력 · 레시피</sub></p>
+<p align="center"><sub>홈 · 추천 음식 · 레시피</sub></p>
 
 ### 🇺🇸 English (en)
 <div align="center">
@@ -80,7 +80,7 @@ K-Grandma recipe は、**材料ベースのAIおすすめ** と **見やすい�
   <img src="assets/en/en_home.png" alt="Home" width="30%" />
   <img src="assets/en/en_recipe.png" alt="Recipe" width="30%" />
 </div>
-<p align="center"><sub>Home · Ingredients · Recipe</sub></p>
+<p align="center"><sub>Home · Recommended food · Recipe</sub></p>
 
 ### 🇯🇵 Japanese (ja)
 <div align="center">
@@ -88,7 +88,7 @@ K-Grandma recipe は、**材料ベースのAIおすすめ** と **見やすい�
   <img src="assets/ja/ja_home.png" alt="ホーム" width="30%" />
   <img src="assets/ja/ja_recipe.png" alt="レシピ" width="30%" />
 </div>
-<p align="center"><sub>ホーム · 材料入力 · レシピ</sub></p>
+<p align="center"><sub>ホーム · おすすめの食べ物 · レシピ</sub></p>
 
 ---
 
