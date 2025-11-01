@@ -45,3 +45,6 @@ springdoc:
     path: /swagger-ui/index.html
     operationsSorter: method
     tagsSorter: alpha
+
+youtube:
+  api-key: ${YOUTUBE_API_KEY}
