@@ -38,7 +38,7 @@ caffeine:
   spec: maximumSize=1000,expireAfterWrite=10m
 
 gemini:
-  endpoint: https://generativelanguage.googleapis.com/v1
+  endpoint: https://generativelanguage.googleapis.com/v1beta
   model: gemini-2.5-pro
   api-key: ${GEMINI_API_KEY:}
 
