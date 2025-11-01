@@ -1,3 +1,4 @@
+// App.js
 import React, { useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
@@ -8,12 +9,10 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import Main from "./screens/Main";
 import HomeScreen from "./screens/HomeScreen";
 import RecipeScreen from "./screens/RecipeScreen";
+import YoutubeSearch from "./screens/YoutubeSearch";
 import FooterNav from "./components/FooterNav";
-
-// ✅ 추가: 재료 입력 모달
 import IngredientsSheet from "./components/IngredientsSheet";
 
-// ✅ 컨텍스트/프로바이더 임포트
 import { GlobalLangProvider, useGlobalLang } from "./components/GlobalLang";
 
 const Stack = createNativeStackNavigator();
@@ -29,7 +28,6 @@ const FONT_BY_LANG = { ko: "Unheo", en: "Brush", ja: "Tegomin" };
 function Root() {
   const { lang, setLang, font, footerH, setFooterH } = useGlobalLang();
   const insets = useSafeAreaInsets();
-
   const t = useMemo(() => footerI18n[lang] ?? footerI18n.ko, [lang]);
 
   const navRef = useNavigationContainerRef();
@@ -37,7 +35,6 @@ function Root() {
   const showFooter = routeName && routeName !== "Main";
 
   const [showLang, setShowLang] = React.useState(false);
-  // ✅ 추가: 재료 입력 모달 on/off
   const [showIngredients, setShowIngredients] = React.useState(false);
 
   return (
@@ -53,6 +50,8 @@ function Root() {
             <Stack.Screen name="Main" component={Main} />
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Recipe" component={RecipeScreen} />
+            {/* Youtube 먹방 검색 */}
+            <Stack.Screen name="Youtube" component={YoutubeSearch} />
           </Stack.Navigator>
         </NavigationContainer>
       </View>
@@ -67,8 +66,8 @@ function Root() {
             lang={lang}
             fontFamily={font}
             onOpenSettings={() => setShowLang(true)}
-            // ✅ 추가: “재료 입력” 아이콘 누르면 모달 열기
             onOpenIngredients={() => setShowIngredients(true)}
+            onOpenBrowse={() => navRef.navigate("Youtube")}
           />
         </View>
       )}
@@ -95,11 +94,8 @@ function Root() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ✅ 재료 입력 모달 */}
-      <IngredientsSheet
-        visible={showIngredients}
-        onClose={() => setShowIngredients(false)}
-      />
+      {/* 재료 입력 모달 */}
+      <IngredientsSheet visible={showIngredients} onClose={() => setShowIngredients(false)} />
     </>
   );
 }

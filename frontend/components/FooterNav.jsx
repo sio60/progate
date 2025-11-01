@@ -1,3 +1,4 @@
+// components/FooterNav.jsx
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from 'react-native';
 
@@ -5,7 +6,7 @@ const { width } = Dimensions.get('window');
 const COL_WIDTH = Math.floor((width - 32) / 4);
 const FOOTER_FONT = { ko: 20, en: 10, ja: 10 };
 
-export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, fontFamily }) {
+export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, onOpenBrowse, fontFamily }) {
   return (
     <View style={styles.footer}>
       {/* 재료 입력 */}
@@ -16,7 +17,7 @@ export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, 
         </Text>
       </TouchableOpacity>
 
-      {/* 레시피 검색 */}
+      {/* 레시피 검색 (추후 연결) */}
       <TouchableOpacity style={styles.footerIcon}>
         <Image source={require('../assets/icons/search.png')} style={styles.iconImg} />
         <Text style={[styles.footerText, { fontFamily, fontSize: FOOTER_FONT[lang] }]} numberOfLines={2}>
@@ -24,8 +25,8 @@ export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, 
         </Text>
       </TouchableOpacity>
 
-      {/* 한식 둘러보기 */}
-      <TouchableOpacity style={styles.footerIcon}>
+      {/* 한식 둘러보기 → 유튜브 먹방 */}
+      <TouchableOpacity style={styles.footerIcon} onPress={onOpenBrowse}>
         <Image source={require('../assets/icons/watch.png')} style={styles.iconImg} />
         <Text style={[styles.footerText, { fontFamily, fontSize: FOOTER_FONT[lang] }]} numberOfLines={2}>
           {t.navBrowse}
