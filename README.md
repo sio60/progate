@@ -64,7 +64,9 @@ K-Grandma recipe は、**材料ベースのAIおすすめ** と **見やすい�
 
 ## Screenshots
 
-> 각 언어별로 **홈 · 재료 입력 · 레시피** 순서입니다。/ In each language: **Home · Ingredients · Recipe**。/ 各言語：**ホーム · 材料入力 · レシピ**。
+> 각 언어별로 **홈 · 추천 음식 · 레시피** 순서입니다。
+In each language: **Home · Recommended food · Recipe**。
+各言語：**ホーム · おすすめの食べ物 · レシピ**。
 
 ### 🇰🇷 Korean (ko)
 <div align="center">
