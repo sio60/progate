@@ -24,25 +24,26 @@ public class RecipeService {
     }
 
     public List<RecipeResponseDto> generateRecipes(List<String> ingredients, Integer timeMax, Integer servings) {
-        if (ingredients == null || ingredients.isEmpty()) return Collections.emptyList();
+    if (ingredients == null || ingredients.isEmpty()) return Collections.emptyList();
+    final String prompt = promptFactory.buildRecipePrompt(ingredients, timeMax, servings);
 
-        // 1) 프롬프트 생성
-        final String prompt = promptFactory.buildRecipePrompt(ingredients, timeMax, servings);
+    // A. 스키마 강제(저온)
+    String jsonStrict = geminiService.generateMeasuredRecipe(prompt);
+    List<RecipeResponseDto> parsed = parseAny(jsonStrict);
+    if (parsed != null && !parsed.isEmpty()) return parsed;
 
-        // 2) 1차 호출 (temperature 0.7)
-        String text = geminiService.generateText(prompt, 0.7);
-        List<RecipeResponseDto> parsed = parseAny(text);
-        if (!parsed.isEmpty()) return parsed;
+    // B. 일반 호출 2회 폴백
+    String text = geminiService.generateText(prompt, 0.2);
+    parsed = parseAny(text);
+    if (parsed != null && !parsed.isEmpty()) return parsed;
 
-        // 3) 2차 재시도 (좀 더 보수적으로)
-        String text2 = geminiService.generateText(prompt, 0.2);
-        parsed = parseAny(text2);
-        if (!parsed.isEmpty()) return parsed;
+    text = geminiService.generateText(prompt, 0.7);
+    parsed = parseAny(text);
+    if (parsed != null && !parsed.isEmpty()) return parsed;
 
-        // 4) 실패 시 빈 배열(프론트에서 에러 메시지 노출)
-        log.warn("레시피 생성 실패: 모델 응답 파싱 불가");
-        return Collections.emptyList();
-    }
+    log.warn("레시피 생성 실패: 모델 응답 파싱 불가");
+    return Collections.emptyList();
+}
 
     // ---------------- 파싱 ----------------
     private List<RecipeResponseDto> parseAny(String text) {
