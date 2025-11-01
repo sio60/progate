@@ -3,7 +3,6 @@ package com.kfood.kfood_be.recipes.controller;
 import com.kfood.kfood_be.recipes.dto.RecipeRequestDto;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
 import com.kfood.kfood_be.recipes.service.RecipeService;
-
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +21,14 @@ public class RecipesController {
     public ResponseEntity<List<RecipeResponseDto>> prepareRecipes(
             @Valid @RequestBody RecipeRequestDto requestDto) {
 
-        List<RecipeResponseDto> recipes = recipeService.generateRecipes(requestDto.getIngredients());
+        // 기존 시그니처 유지 + 선택 파라미터 전달 가능
+        List<RecipeResponseDto> recipes =
+                recipeService.generateRecipes(
+                        requestDto.getIngredients(),
+                        requestDto.getTimeMax(),
+                        requestDto.getServings()
+                );
+
         return ResponseEntity.ok(recipes);
     }
 }

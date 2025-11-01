@@ -17,9 +17,13 @@ import java.util.Map;
 @Service
 public class GeminiService {
 
-    @Value("${gemini.api-key}") private String apiKey;
-    @Value("${gemini.model}")   private String model;
-    @Value("${gemini.endpoint:https://generativelanguage.googleapis.com/v1}")
+    @Value("${gemini.api-key}")
+    private String apiKey;
+
+    @Value("${gemini.model:gemini-1.5-pro-latest}")
+    private String model;
+
+    @Value("${gemini.endpoint:https://generativelanguage.googleapis.com/v1beta}")
     private String endpoint;
 
     private WebClient web;
@@ -31,23 +35,36 @@ public class GeminiService {
                 .compress(true);
 
         this.web = WebClient.builder()
-                .baseUrl(endpoint)                    
-                .defaultHeader("x-goog-api-key", apiKey) 
+                .baseUrl(endpoint)
                 .clientConnector(new ReactorClientHttpConnector(http))
                 .build();
 
-        log.info("[Gemini] bean ready. endpoint={}, model={}", endpoint, model);
+        log.info("[Gemini] ready. endpoint={}, model={}", endpoint, model);
     }
 
-    public String generateText(String prompt) {
-        String path = "/models/{model}:generateContent";
+    public String generateText(String prompt) { return generateText(prompt, 0.7); }
+
+    public String generateText(String prompt, double temperature) {
+        final String path = "/models/" + model + ":generateContent?key=" + apiKey;
+
         Map<String, Object> body = Map.of(
-                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt))))
+                "contents", List.of(Map.of(
+                        "role", "user",
+                        "parts", List.of(Map.of("text", prompt))
+                )),
+                "generationConfig", Map.of(
+                        "temperature", temperature,
+                        "topP", 0.95,
+                        "topK", 40,
+                        "maxOutputTokens", 2048,
+                        "responseMimeType", "application/json"
+                )
         );
 
         try {
-            Map<?,?> response = web.post()
-                    .uri(path, model)                       
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = web.post()
+                    .uri(path)
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
@@ -55,18 +72,29 @@ public class GeminiService {
                     .bodyToMono(Map.class)
                     .timeout(Duration.ofSeconds(60))
                     .block();
-            
-            // Gemini 응답 구조: candidates[0].content.parts[0].text
-            var candidates = (List<Map<?,?>>) response.get("candidates");
-            if (candidates == null || candidates.isEmpty()) {
-                throw new RuntimeException("Gemini 응답에 candidates가 없음");
-            }
-            var content = (Map<?,?>) candidates.get(0).get("content");
-            var parts = (List<Map<?,?>>) content.get("parts");
-            return (String) parts.get(0).get("text");
+
+            if (response == null) throw new IllegalStateException("응답 null");
+
+            @SuppressWarnings("unchecked")
+            List<Map<String,Object>> cands = (List<Map<String,Object>>) response.get("candidates");
+            if (cands == null || cands.isEmpty()) throw new IllegalStateException("candidates 없음");
+
+            @SuppressWarnings("unchecked")
+            Map<String,Object> content = (Map<String,Object>) cands.get(0).get("content");
+            @SuppressWarnings("unchecked")
+            List<Map<String,Object>> parts = (List<Map<String,Object>>) content.get("parts");
+
+            String text = String.valueOf(parts.get(0).get("text"));
+            String cleaned = text == null ? "" : text
+                    .replaceAll("```json\\s*", "")
+                    .replaceAll("```\\s*", "")
+                    .trim();
+
+            log.info("[Gemini 응답] {}", cleaned.length() > 400 ? cleaned.substring(0,400) + "..." : cleaned);
+            return cleaned;
         } catch (Exception e) {
             log.error("Gemini 호출 실패", e);
-            throw new RuntimeException("Gemini 응답 파싱 실패: " + e.getMessage(), e);
+            return null;
         }
     }
 }

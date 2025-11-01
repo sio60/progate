@@ -1,115 +1,115 @@
 package com.kfood.kfood_be.recipes.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
-import com.kfood.kfood_be.recipes.entity.GeneratedRecipeEntity;
-import com.kfood.kfood_be.recipes.repository.GeneratedRecipeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RecipeService {
 
-    private final GeneratedRecipeRepository repo;
-    private final GeminiService gemini; // 프롬프트 생성은 기존 PromptFactory 사용 중이면 연결
-
+    private final GeminiService geminiService;
+    private final PromptFactory promptFactory;
     private final ObjectMapper om = new ObjectMapper();
 
-    /**
-     * 1) 재료들을 문자열로 합침
-     * 2) DB에 같은(또는 포함) 재료 결과가 있으면 그걸 반환
-     * 3) 없으면 Gemini 호출 → 파싱 → 저장 → 반환
-     */
-    @Transactional
     public List<RecipeResponseDto> generateRecipes(List<String> ingredients) {
-        String joined = joinIngredients(ingredients);
+        return generateRecipes(ingredients, null, null);
+    }
 
-        // 1) 캐시처럼 DB에서 먼저 조회 (부분일치)
-        List<GeneratedRecipeEntity> cached = repo.findByIngredientContainingIgnoreCase(joined);
-        if (!cached.isEmpty()) {
-            return cached.stream().map(this::toDto).collect(Collectors.toList());
+    public List<RecipeResponseDto> generateRecipes(List<String> ingredients, Integer timeMax, Integer servings) {
+        if (ingredients == null || ingredients.isEmpty()) return Collections.emptyList();
+
+        // 1) 프롬프트 생성
+        final String prompt = promptFactory.buildRecipePrompt(ingredients, timeMax, servings);
+
+        // 2) 1차 호출 (temperature 0.7)
+        String text = geminiService.generateText(prompt, 0.7);
+        List<RecipeResponseDto> parsed = parseAny(text);
+        if (!parsed.isEmpty()) return parsed;
+
+        // 3) 2차 재시도 (좀 더 보수적으로)
+        String text2 = geminiService.generateText(prompt, 0.2);
+        parsed = parseAny(text2);
+        if (!parsed.isEmpty()) return parsed;
+
+        // 4) 실패 시 빈 배열(프론트에서 에러 메시지 노출)
+        log.warn("레시피 생성 실패: 모델 응답 파싱 불가");
+        return Collections.emptyList();
+    }
+
+    // ---------------- 파싱 ----------------
+    private List<RecipeResponseDto> parseAny(String text) {
+        try {
+            if (text == null || text.isBlank()) return Collections.emptyList();
+            String cleaned = text.replaceAll("```json\\s*", "")
+                                 .replaceAll("```\\s*", "")
+                                 .trim();
+            JsonNode node = om.readTree(cleaned);
+
+            if (node.isArray()) {
+                List<RecipeResponseDto> out = new ArrayList<>();
+                for (JsonNode n : node) out.add(fromNode(n));
+                return out.stream().filter(Objects::nonNull).collect(Collectors.toList());
+            } else if (node.isObject()) {
+                RecipeResponseDto dto = fromNode(node);
+                return dto == null ? Collections.emptyList() : List.of(dto);
+            }
+        } catch (Exception e) {
+            log.warn("모델 JSON 파싱 실패: {}", e.toString());
         }
-
-        // 2) 없으면 Gemini 호출
-        String prompt = buildPrompt(joined);
-        String geminiRaw = gemini.generateText(prompt);
-
-        // 기대 포맷: [{"food":"김치전","ingredient":"김치,밀가루,대파","recipe":"..."} , ...]
-        List<Map<String, String>> parsed = safeParseJsonList(geminiRaw);
-
-        if (parsed.isEmpty()) {
-            // 제너레이티브 응답이 JSON이 아니거나 빈 경우 방어적으로 1개 생성
-            GeneratedRecipeEntity fallback = repo.save(GeneratedRecipeEntity.builder()
-                    .food("추천요리")
-                    .ingredient(joined)
-                    .recipe(geminiRaw.length() > 3900 ? geminiRaw.substring(0, 3900) : geminiRaw)
-                    .build());
-            return List.of(toDto(fallback));
-        }
-
-        List<GeneratedRecipeEntity> saved = new ArrayList<>();
-        for (Map<String, String> m : parsed) {
-            GeneratedRecipeEntity e = GeneratedRecipeEntity.builder()
-                    .food(   Optional.ofNullable(m.get("food")).orElse("추천요리"))
-                    .ingredient(Optional.ofNullable(m.get("ingredient")).orElse(joined))
-                    .recipe( Optional.ofNullable(m.get("recipe")).orElse(""))
-                    .build();
-            saved.add(repo.save(e));
-        }
-        return saved.stream().map(this::toDto).collect(Collectors.toList());
+        return Collections.emptyList();
     }
 
-    // 선택: ingredient 포함 검색용
-    @Transactional(readOnly = true)
-    public List<RecipeResponseDto> findByIngredient(String ingredient) {
-        return repo.findByIngredientContainingIgnoreCase(ingredient)
-                .stream().map(this::toDto).collect(Collectors.toList());
-    }
+    private RecipeResponseDto fromNode(JsonNode n) {
+        if (n == null || !n.isObject()) return null;
 
-    private String joinIngredients(List<String> ingredients) {
-        return ingredients.stream()
-                .map(String::trim)
-                .filter(s -> !s.isBlank())
-                .collect(Collectors.joining(", "));
-    }
+        String title = n.path("title").asText(null);
+        if (title == null) return null;
 
-    private String buildPrompt(String joined) {
-        return """
-                다음 재료로 만들 수 있는 한국 전통음식 1~3개를 제시해.
-                JSON 배열로만 응답해. 각 원소는 { "food": 음식명, "ingredient": "콤마로 나열", "recipe": "단계별 설명" } 형식.
-                재료: %s
-                """.formatted(joined);
-    }
-
-    private RecipeResponseDto toDto(GeneratedRecipeEntity e) {
         return RecipeResponseDto.builder()
-                .id(e.getId())
-                .food(e.getFood())
-                .ingredient(e.getIngredient())
-                .recipe(e.getRecipe())
+                .title(title)
+                .category(n.path("category").asText(null))
+                .timeMin(n.hasNonNull("timeMin") ? n.get("timeMin").asInt() : null)
+                .servings(n.hasNonNull("servings") ? n.get("servings").asInt() : null)
+                .difficulty(n.path("difficulty").asText(null))
+                .ingredients(parseIngredients(n.path("ingredients")))
+                .steps(parseSteps(n.path("steps")))
+                .chefNote(n.path("chefNote").asText(null))
+                .tip(n.path("tip").asText(null))
                 .build();
     }
 
-    private List<Map<String, String>> safeParseJsonList(String raw) {
-        try {
-            String trimmed = raw.strip();
-            // 코드블록(```json ... ```) 제거 방어
-            if (trimmed.startsWith("```")) {
-                int first = trimmed.indexOf('[');
-                int last  = trimmed.lastIndexOf(']');
-                if (first >= 0 && last > first) {
-                    trimmed = trimmed.substring(first, last + 1);
-                }
-            }
-            return om.readValue(trimmed, new TypeReference<List<Map<String, String>>>() {});
-        } catch (Exception e) {
-            return Collections.emptyList();
+    private List<RecipeResponseDto.Ingredient> parseIngredients(JsonNode arr) {
+        if (arr == null || !arr.isArray()) return Collections.emptyList();
+        List<RecipeResponseDto.Ingredient> out = new ArrayList<>();
+        for (JsonNode x : arr) {
+            if (!x.isObject()) continue;
+            String name = x.path("name").asText(null);
+            if (name == null || name.isBlank()) continue;
+            Integer qty = x.hasNonNull("qty") ? x.get("qty").asInt() : null;
+            String unit = x.path("unit").asText(null);
+            out.add(RecipeResponseDto.Ingredient.builder().name(name).qty(qty).unit(unit).build());
         }
+        return out;
+    }
+
+    private List<RecipeResponseDto.Step> parseSteps(JsonNode arr) {
+        if (arr == null || !arr.isArray()) return Collections.emptyList();
+        List<RecipeResponseDto.Step> out = new ArrayList<>();
+        int i = 1;
+        for (JsonNode x : arr) {
+            String txt = x.isObject() ? x.path("text").asText(null) : (x.isTextual() ? x.asText() : null);
+            if (txt == null || txt.isBlank()) continue;
+            Integer order = x.hasNonNull("order") ? x.get("order").asInt() : i++;
+            out.add(RecipeResponseDto.Step.builder().order(order).text(txt).build());
+        }
+        return out;
     }
 }
