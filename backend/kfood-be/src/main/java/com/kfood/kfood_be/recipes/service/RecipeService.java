@@ -1,16 +1,19 @@
 package com.kfood.kfood_be.recipes.service;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -404,5 +407,6 @@ public class RecipeService {
                 .chefNote("제미나이 응답 실패 시 기본치로 구성된 임시 레시피입니다.")
                 .tip("재료 상태에 따라 물/간장 수치를 ±20% 조절하세요.")
                 .build();
+
     }
 }

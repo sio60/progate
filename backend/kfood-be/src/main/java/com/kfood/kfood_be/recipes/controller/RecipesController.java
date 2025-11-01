@@ -1,14 +1,21 @@
 package com.kfood.kfood_be.recipes.controller;
 
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.kfood.kfood_be.recipes.dto.RecipeRequestDto;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
 import com.kfood.kfood_be.recipes.service.RecipeService;
-import lombok.RequiredArgsConstructor;
-import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/recipes")
@@ -29,6 +36,12 @@ public class RecipesController {
                         requestDto.getServings()
                 );
 
+        return ResponseEntity.ok(recipes);
+    }
+    
+    @GetMapping("/search")
+    public ResponseEntity<List<RecipeResponseDto>> searchRecipes(@RequestParam String query) {
+        List<RecipeResponseDto> recipes = recipeService.searchRecipeByName(query);
         return ResponseEntity.ok(recipes);
     }
 }
