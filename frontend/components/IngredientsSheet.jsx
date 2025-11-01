@@ -1,4 +1,4 @@
-// IngredientsSheet.js
+// IngredientsSheet.jsx
 import React, { useMemo, useState } from "react";
 import {
   Modal,
@@ -9,10 +9,9 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Platform,
 } from "react-native";
-import Constants from "expo-constants";
 import { useGlobalLang } from "./GlobalLang";
+import { apiPost } from "../config/api";
 
 const tMap = {
   ko: {
@@ -62,40 +61,105 @@ const tMap = {
   },
 };
 
-const fromExtra = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_BASE;
-const fromEnv = process.env?.EXPO_PUBLIC_API_BASE;
-const DEFAULT_BASE =
-  Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
-const API_BASE = (fromExtra || fromEnv || DEFAULT_BASE).replace(/\/+$/g, "");
+// ── 유틸: 개행 정규화 + 멀티라인 렌더러 ──────────────────────────────
+const normalizeLB = (s = "") =>
+  String(s)
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u2028|\u2029/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
-// ---- JSON이 깨져 와도 최대한 복구해서 파싱 ----
+function ML({ text, style }) {
+  const parts = normalizeLB(text).split("\n");
+  return (
+    <Text style={style}>
+      {parts.map((p, i) => (
+        <Text key={i}>
+          {p}
+          {i < parts.length - 1 ? "\n" : ""}
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+// ── Gemini 응답에서 JSON 추출 ───────────────────────────────────────
 function extractJson(text) {
   if (!text) throw new Error("EMPTY");
   const cleaned = text.replace(/```json|```/g, "").trim();
-  // 1) 바로 파싱
-  try { return JSON.parse(cleaned); } catch (_) {}
-  // 2) 본문에 설명이 섞였을 때, 가장 바깥 [] 또는 {}만 잘라 파싱
-  const sArr = cleaned.indexOf("[");
-  const sObj = cleaned.indexOf("{");
-  const s = [sArr, sObj].filter(i => i >= 0).sort((a,b)=>a-b)[0];
-  const eArr = cleaned.lastIndexOf("]");
-  const eObj = cleaned.lastIndexOf("}");
-  const e = Math.max(eArr, eObj);
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {}
+
+  const s = Math.min(
+    ...["[", "{"].map((c) => cleaned.indexOf(c)).filter((i) => i >= 0)
+  );
+  const e = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
   if (s >= 0 && e > s) {
     const slice = cleaned.slice(s, e + 1);
-    try { return JSON.parse(slice); } catch (_) {}
+    try {
+      return JSON.parse(slice);
+    } catch (_) {}
   }
   throw new Error("BAD_JSON");
 }
 
-// 문자열/배열 모두 커버하는 정규화
+// ── 단계 텍스트를 1/2/3/4… 배열로 쪼개기 ───────────────────────────
+function tokenizeSteps(value) {
+  if (!value) return [];
+
+  // 이미 배열인 경우
+  if (Array.isArray(value)) {
+    return value
+      .map((s) => (typeof s === "string" ? s : s?.text))
+      .filter(Boolean)
+      .map((s) => s.trim());
+  }
+
+  // 문자열인 경우
+  if (typeof value === "string") {
+    const cleaned = normalizeLB(value);
+
+    // 1) 우선 개행 기준 분해
+    let parts = cleaned.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      parts = parts
+        .map((s) => s.replace(/^\s*\d+[\.\)\-\s]\s*/, "").trim())
+        .filter(Boolean);
+    }
+
+    // 2) 여전히 한 줄이면  "1. " / "2) " / "3 - " 등 숫자 토큰으로 분해
+    if (parts.length <= 1 && /\d+[\.\)\-]\s/.test(cleaned)) {
+      parts = cleaned
+        .replace(/^\s*\d+[\.\)\-]\s*/, "")
+        .split(/\s+\d+[\.\)\-]\s+/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    // 3) 그래도 한 덩어리면 문장 단위로 분해(마침표+공백)
+    if (parts.length <= 1) {
+      parts = cleaned
+        .split(/(?<=\.)\s+(?=[가-힣A-Za-z0-9])/g)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    return parts;
+  }
+
+  return [];
+}
+
+// ── 정규화 ──────────────────────────────────────────────────────────
 function normalizeResult(raw, idx = 0) {
   const name = raw?.title || raw?.food || raw?.name || "(제목 없음)";
 
+  // 재료
   let ingredients = [];
   if (Array.isArray(raw?.ingredients)) {
     ingredients = raw.ingredients
-      .map(i => {
+      .map((i) => {
         if (!i) return "";
         const n = i.name ?? i.item ?? "";
         const q = i.qty != null ? String(i.qty) : "";
@@ -103,26 +167,23 @@ function normalizeResult(raw, idx = 0) {
         return [n, q, u].filter(Boolean).join(" ").trim();
       })
       .filter(Boolean);
-  } else if (typeof raw?.ingredient === "string") {
+  }
+  if (!ingredients.length && typeof raw?.ingredient === "string") {
     ingredients = raw.ingredient
       .split(/\r?\n|,|·|•/g)
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean);
   }
 
+  // 단계
   let steps = [];
-  if (Array.isArray(raw?.steps)) {
-    steps = raw.steps.map(s => (typeof s === "string" ? s : s?.text)).filter(Boolean);
-  } else if (typeof raw?.recipe === "string") {
-    steps = raw.recipe
-      .split(/\r?\n/g)
-      .map(line => line.replace(/^\s*\d+[\).\-\s]?\s*/, "").trim())
-      .filter(Boolean);
-  }
+  if (raw?.steps != null) steps = tokenizeSteps(raw.steps);
+  else if (raw?.recipe != null) steps = tokenizeSteps(raw.recipe);
 
   return { id: idx + 1, name, ingredients, steps };
 }
 
+// ── 컴포넌트 ────────────────────────────────────────────────────────
 export default function IngredientsSheet({ visible, onClose }) {
   const { lang, font } = useGlobalLang();
   const t = useMemo(() => tMap[lang] ?? tMap.ko, [lang]);
@@ -136,56 +197,72 @@ export default function IngredientsSheet({ visible, onClose }) {
   const addItem = () => {
     const v = input.trim();
     if (!v) return;
-    if (items.includes(v)) { setInput(""); return; }
-    setItems(prev => [...prev, v]);
+    if (items.includes(v)) {
+      setInput("");
+      return;
+    }
+    setItems((prev) => [...prev, v]);
     setInput("");
   };
 
-  const removeItem = (v) => setItems(prev => prev.filter(x => x !== v));
-  const resetAll = () => { setItems([]); setResults([]); setErr(""); setInput(""); };
+  const removeItem = (v) => setItems((prev) => prev.filter((x) => x !== v));
+  const resetAll = () => {
+    setItems([]);
+    setResults([]);
+    setErr("");
+    setInput("");
+  };
 
   const requestRecipes = async () => {
-    setErr(""); setResults([]);
-    if (!items.length) { setErr(t.empty); return; }
+    setErr("");
+    setResults([]);
+    if (!items.length) {
+      setErr(t.empty);
+      return;
+    }
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/recipes/prepare`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ ingredients: items }), // 옵션 제거: timeMax/servings 안 보냄
-      });
+      const raw = await apiPost("/api/recipes/prepare", { ingredients: items });
+      const rawText = typeof raw === "string" ? raw : JSON.stringify(raw);
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${text?.slice(0, 200)}`);
-      }
+      console.log("🧪 Gemini 응답 rawText:\n", rawText);
 
-      const rawText = await res.text();
       let json;
-      try { json = extractJson(rawText); }
-      catch (e) {
-        console.warn("[ParseFail] raw preview:", rawText?.slice(0, 400));
-        throw e;
-      }
-
-      const arr = Array.isArray(json) ? json : [json];
-      const norm = arr.map((it, idx) => normalizeResult(it, idx)).filter(
-        r => (r.ingredients?.length || r.steps?.length || r.name !== "(제목 없음)")
-      );
-
-      if (!norm.length) {
+      try {
+        json = extractJson(rawText);
+      } catch (e) {
+        console.warn("[❌ JSON 파싱 실패]", e.message);
         setErr(t.failGen);
         return;
       }
+
+      const arr = Array.isArray(json) ? json : [json];
+      const norm = arr
+        .map((it, idx) => normalizeResult(it, idx))
+        .filter(
+          (r) =>
+            r.ingredients?.length || r.steps?.length || r.name !== "(제목 없음)"
+        );
+
+      console.log("✅ 정규화 결과:", norm);
+
+      if (!norm.length) {
+        console.warn("[⚠️ 정규화 실패] → 응답은 있었으나 내용 없음");
+        setErr(t.failGen);
+        return;
+      }
+
       setResults(norm);
     } catch (e) {
       const msg =
-        String(e?.name) === "AbortError" ? t.timeout :
-        String(e?.message || "").includes("Network request failed") ? t.netFail :
-        t.failGen;
+        String(e?.name) === "AbortError"
+          ? t.timeout
+          : String(e?.message || "").includes("Network request failed")
+          ? t.netFail
+          : t.failGen;
       setErr(msg);
-      console.warn("[에러]", e);
+      console.warn("[💥 에러]", e);
     } finally {
       setLoading(false);
     }
@@ -197,7 +274,6 @@ export default function IngredientsSheet({ visible, onClose }) {
         <View style={styles.sheet}>
           <Text style={[styles.title, { fontFamily: font }]}>{t.title}</Text>
 
-          {/* 입력 & 추가 */}
           <View style={styles.row}>
             <TextInput
               value={input}
@@ -213,9 +289,8 @@ export default function IngredientsSheet({ visible, onClose }) {
             </TouchableOpacity>
           </View>
 
-          {/* 칩 */}
           <View style={styles.chips}>
-            {items.map(v => (
+            {items.map((v) => (
               <View key={v} style={styles.chip}>
                 <Text style={[styles.chipTxt, { fontFamily: font }]}>{v}</Text>
                 <TouchableOpacity onPress={() => removeItem(v)} style={styles.chipX}>
@@ -225,7 +300,6 @@ export default function IngredientsSheet({ visible, onClose }) {
             ))}
           </View>
 
-          {/* 액션 */}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.resetBtn} onPress={resetAll} disabled={loading}>
               <Text style={[styles.resetTxt, { fontFamily: font }]}>{t.reset}</Text>
@@ -235,8 +309,9 @@ export default function IngredientsSheet({ visible, onClose }) {
               onPress={requestRecipes}
               disabled={loading || !items.length}
             >
-              {loading ? <ActivityIndicator /> :
-                <Text style={[styles.genTxt, { fontFamily: font }]}>{t.generate}</Text>}
+              {loading ? <ActivityIndicator /> : (
+                <Text style={[styles.genTxt, { fontFamily: font }]}>{t.generate}</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -246,7 +321,7 @@ export default function IngredientsSheet({ visible, onClose }) {
             <>
               <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
               <ScrollView style={styles.resultScroll}>
-                {results.map(r => (
+                {results.map((r) => (
                   <View key={r.id} style={styles.card}>
                     <Text style={[styles.foodName, { fontFamily: font }]}>{r.name}</Text>
 
@@ -256,7 +331,10 @@ export default function IngredientsSheet({ visible, onClose }) {
                           {t.ingredients}
                         </Text>
                         {r.ingredients.map((line, i) => (
-                          <Text key={i} style={[styles.li, { fontFamily: font }]}>• {line}</Text>
+                          <View key={i} style={styles.liRow}>
+                            <Text style={[styles.bullet, { fontFamily: font }]}>•</Text>
+                            <ML text={line} style={[styles.liText, { fontFamily: font }]} />
+                          </View>
                         ))}
                       </>
                     )}
@@ -265,9 +343,10 @@ export default function IngredientsSheet({ visible, onClose }) {
                       <>
                         <Text style={[styles.sectionTitle, { fontFamily: font }]}>{t.steps}</Text>
                         {r.steps.map((line, i) => (
-                          <Text key={i} style={[styles.li, { fontFamily: font }]}>
-                            {i + 1}. {line}
-                          </Text>
+                          <View key={i} style={styles.stepRow}>
+                            <Text style={[styles.stepIdx, { fontFamily: font }]}>{i + 1}.</Text>
+                            <ML text={line} style={[styles.liText, { fontFamily: font }]} />
+                          </View>
                         ))}
                       </>
                     )}
@@ -308,10 +387,25 @@ const styles = StyleSheet.create({
   err: { marginTop: 8, color: "#d22" },
   resultTitle: { marginTop: 16, fontSize: 16 },
   resultScroll: { marginTop: 8, maxHeight: 360 },
+
   card: { borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, marginBottom: 12, backgroundColor: "#fff" },
   foodName: { fontSize: 18, marginBottom: 8, color: "#111" },
-  sectionTitle: { fontSize: 15, marginTop: 6, marginBottom: 4, color: "#333" },
-  li: { fontSize: 14, lineHeight: 22, color: "#333" },
+  sectionTitle: { fontSize: 15, marginTop: 6, marginBottom: 8, color: "#333" },
+
+  // 리스트 레이아웃
+  liRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 6 },
+  stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
+
+  bullet: { width: 16, textAlign: "center", lineHeight: 22, color: "#333", marginTop: 1 },
+  stepIdx: { width: 22, textAlign: "right", lineHeight: 22, color: "#333", marginTop: 1 },
+
+  liText: {
+    flex: 1,
+    lineHeight: 22,
+    color: "#333",
+    includeFontPadding: false,
+  },
+
   closeBtn: { alignSelf: "center", marginTop: 12, paddingVertical: 10, paddingHorizontal: 16 },
   closeTxt: { color: "#333" },
 });
