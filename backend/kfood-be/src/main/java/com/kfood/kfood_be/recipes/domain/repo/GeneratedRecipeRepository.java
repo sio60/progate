@@ -8,3 +8,4 @@ import com.kfood.kfood_be.recipes.domain.entity.GeneratedRecipe;
 @Repository
 public interface GeneratedRecipeRepository extends JpaRepository<GeneratedRecipe, Long> {
 }
+
