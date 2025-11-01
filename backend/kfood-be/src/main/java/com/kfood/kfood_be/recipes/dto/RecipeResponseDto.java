@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,8 +15,31 @@ import lombok.Setter;
 @Builder
 public class RecipeResponseDto {
 
-    private Long id;             // DB 저장된 레시피 ID
-    private String food;         // 음식명
-    private String ingredient;   // 재료명 (콤마로 구분)
-    private String recipe;       // 요리방법 (String으로 저장)
+    private Long id;
+    private String title;
+    private Integer timeMin;
+    private List<IngredientItem> ingredients;
+    private List<StepItem> steps;
+    private String audioUrl;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class IngredientItem {
+        private String name;
+        private Integer qty;
+        private String unit;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StepItem {
+        private Integer order;
+        private String text;
+    }
 }

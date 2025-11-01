@@ -1,4 +1,4 @@
-package com.kfood.kfood_be.recipes.app;
+package com.kfood.kfood_be.recipes.service;
 
 import com.google.cloud.texttospeech.v1.*;
 import org.springframework.beans.factory.annotation.Value;

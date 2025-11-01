@@ -1,4 +1,4 @@
-package com.kfood.kfood_be.recipes.app;
+package com.kfood.kfood_be.recipes.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

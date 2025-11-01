@@ -1,6 +1,5 @@
-package com.kfood.kfood_be.recipes.app;
+package com.kfood.kfood_be.recipes.service;
 
-import com.kfood.kfood_be.common.dto.IngredientDto;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -9,7 +8,7 @@ import java.util.stream.Collectors;
 @Component
 public class PromptFactory {
 
-    public String buildRecipePrompt(List<IngredientDto> ings, Integer timeMax, Integer servings) {
+    public String buildRecipePrompt(List<String> ings, Integer timeMax, Integer servings) {
         var head = """
                 역할: 당신은 한식 셰프입니다.
                 주어진 재료만 사용하여 한국어 레시피 1개를 생성하세요.
@@ -25,9 +24,7 @@ public class PromptFactory {
                 """.formatted(timeMax == null ? 30 : timeMax, servings == null ? 2 : servings);
 
         String list = ings.stream()
-                .map(i -> "- " + i.getName() + " "
-                        + (i.getQty() == null ? "" : i.getQty())
-                        + (i.getUnit() == null ? "" : i.getUnit()))
+                .map(i -> "- " + i)
                 .collect(Collectors.joining("\n"));
 
         return head + list;

@@ -1,4 +1,4 @@
-package com.kfood.kfood_be.recipes.domain.entity;
+package com.kfood.kfood_be.recipes.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,25 +12,36 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
-@Table(name = "generated_recipe")
+@Table(name = "GENERATED_RECIPE")
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class GeneratedRecipe {
+public class GeneratedRecipeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "recipe_seq")
     @SequenceGenerator(name = "recipe_seq", sequenceName = "RECIPE_SEQ", allocationSize = 1)
     private Long id;
 
-    @Column(nullable = false)
-    private String food;
+    @Column(name = "TITLE", nullable = false, length = 200)
+    private String title;
 
-    @Column(nullable = false)
-    private String ingredient;
+    @Column(name = "TIME_MIN", nullable = false)
+    private Integer timeMin;
 
-    @Column(length = 4000, nullable = false)
-    private String recipe;
+    @Column(name = "RECIPE_JSON", nullable = false, length = 4000)
+    private String recipeJson;
+
+    @Column(name = "AUDIO_URL", length = 300)
+    private String audioUrl;
+
+    @Column(name = "SOURCE", length = 40)
+    private String source = "gemini";
+
+    @Column(name = "CREATED_AT")
+    private LocalDateTime createdAt;
 }
