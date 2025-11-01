@@ -2,14 +2,18 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
+  main:
+    allow-bean-definition-overriding: true
   datasource:
-    url: jdbc:oracle:thin:@//localhost:1521/XE
+    url: jdbc:oracle:thin:@//localhost:1521/xe
     username: c##idev
     password: 1234
     driver-class-name: oracle.jdbc.OracleDriver
   jpa:
     hibernate:
-      ddl-auto: update  
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
@@ -32,3 +36,11 @@ tts:
 
 storage:
   audioDir: ./data/audio
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    operationsSorter: method
+    tagsSorter: alpha
