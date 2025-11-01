@@ -10,3 +10,4 @@ npx expo install expo-font expo-localization
 npm install i18n-js
 npx expo install expo-blur expo-localization
 npx expo install expo-font
+expo install expo-speech

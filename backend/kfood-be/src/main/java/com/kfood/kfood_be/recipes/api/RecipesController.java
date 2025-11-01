@@ -1,7 +1,7 @@
 package com.kfood.kfood_be.recipes.api;
 
 import com.kfood.kfood_be.recipes.dto.RecipeRequestDto;
-import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;;
+import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
 import com.kfood.kfood_be.recipes.app.RecipeService;
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
