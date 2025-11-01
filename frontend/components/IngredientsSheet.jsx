@@ -26,6 +26,7 @@ const tMap = {
     result: "생성 결과",
     ingredients: "재료",
     steps: "조리 과정",
+    failGen: "레시피를 만들지 못했어요. 재시도 해보세요.",
     timeout: "요청이 시간 초과됐어요(30s). 서버 지연 또는 IP 설정 확인",
     netFail: "연결 실패: API_BASE/IP/방화벽 확인",
   },
@@ -40,6 +41,7 @@ const tMap = {
     result: "Results",
     ingredients: "Ingredients",
     steps: "Steps",
+    failGen: "Couldn't build a recipe. Please try again.",
     timeout: "Request timed out (30s). Server slow or wrong IP",
     netFail: "Network failed: check API_BASE/IP/firewall",
   },
@@ -54,6 +56,7 @@ const tMap = {
     result: "生成結果",
     ingredients: "材料",
     steps: "作り方",
+    failGen: "レシピを作成できませんでした。再試行してください。",
     timeout: "タイムアウト(30秒)。サーバ遅延またはIP設定を確認",
     netFail: "接続失敗: API/IP/Firewallを確認",
   },
@@ -65,30 +68,34 @@ const DEFAULT_BASE =
   Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
 const API_BASE = (fromExtra || fromEnv || DEFAULT_BASE).replace(/\/+$/g, "");
 
-async function fetchWithTimeout(url, opt = {}, ms = 30000) {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { ...opt, signal: ctrl.signal });
-  } finally {
-    clearTimeout(id);
+// ---- JSON이 깨져 와도 최대한 복구해서 파싱 ----
+function extractJson(text) {
+  if (!text) throw new Error("EMPTY");
+  const cleaned = text.replace(/```json|```/g, "").trim();
+  // 1) 바로 파싱
+  try { return JSON.parse(cleaned); } catch (_) {}
+  // 2) 본문에 설명이 섞였을 때, 가장 바깥 [] 또는 {}만 잘라 파싱
+  const sArr = cleaned.indexOf("[");
+  const sObj = cleaned.indexOf("{");
+  const s = [sArr, sObj].filter(i => i >= 0).sort((a,b)=>a-b)[0];
+  const eArr = cleaned.lastIndexOf("]");
+  const eObj = cleaned.lastIndexOf("}");
+  const e = Math.max(eArr, eObj);
+  if (s >= 0 && e > s) {
+    const slice = cleaned.slice(s, e + 1);
+    try { return JSON.parse(slice); } catch (_) {}
   }
+  throw new Error("BAD_JSON");
 }
 
-// 문자열/배열 모두 커버하는 정규화 유틸
+// 문자열/배열 모두 커버하는 정규화
 function normalizeResult(raw, idx = 0) {
-  // 이름
-  const name =
-    raw?.title ||
-    raw?.food ||
-    raw?.name ||
-    "(제목 없음)";
+  const name = raw?.title || raw?.food || raw?.name || "(제목 없음)";
 
-  // 재료
   let ingredients = [];
   if (Array.isArray(raw?.ingredients)) {
     ingredients = raw.ingredients
-      .map((i) => {
+      .map(i => {
         if (!i) return "";
         const n = i.name ?? i.item ?? "";
         const q = i.qty != null ? String(i.qty) : "";
@@ -97,32 +104,23 @@ function normalizeResult(raw, idx = 0) {
       })
       .filter(Boolean);
   } else if (typeof raw?.ingredient === "string") {
-    // fallback: "김치, 밥, ..." 또는 줄바꿈
     ingredients = raw.ingredient
       .split(/\r?\n|,|·|•/g)
-      .map((s) => s.trim())
+      .map(s => s.trim())
       .filter(Boolean);
   }
 
-  // 단계
   let steps = [];
   if (Array.isArray(raw?.steps)) {
-    steps = raw.steps
-      .map((s) => (typeof s === "string" ? s : s?.text))
-      .filter(Boolean);
+    steps = raw.steps.map(s => (typeof s === "string" ? s : s?.text)).filter(Boolean);
   } else if (typeof raw?.recipe === "string") {
     steps = raw.recipe
       .split(/\r?\n/g)
-      .map((line) => line.replace(/^\s*\d+[\).\-\s]?\s*/, "").trim())
+      .map(line => line.replace(/^\s*\d+[\).\-\s]?\s*/, "").trim())
       .filter(Boolean);
   }
 
-  return {
-    id: idx + 1,
-    name,
-    ingredients,
-    steps,
-  };
+  return { id: idx + 1, name, ingredients, steps };
 }
 
 export default function IngredientsSheet({ visible, onClose }) {
@@ -138,65 +136,54 @@ export default function IngredientsSheet({ visible, onClose }) {
   const addItem = () => {
     const v = input.trim();
     if (!v) return;
-    if (items.includes(v)) {
-      setInput("");
-      return;
-    }
-    setItems((prev) => [...prev, v]);
+    if (items.includes(v)) { setInput(""); return; }
+    setItems(prev => [...prev, v]);
     setInput("");
   };
 
-  const removeItem = (v) => setItems((prev) => prev.filter((x) => x !== v));
-  const resetAll = () => {
-    setItems([]);
-    setResults([]);
-    setErr("");
-    setInput("");
-  };
+  const removeItem = (v) => setItems(prev => prev.filter(x => x !== v));
+  const resetAll = () => { setItems([]); setResults([]); setErr(""); setInput(""); };
 
   const requestRecipes = async () => {
-    setErr("");
-    setResults([]);
-    if (!items.length) {
-      setErr(t.empty);
-      return;
-    }
+    setErr(""); setResults([]);
+    if (!items.length) { setErr(t.empty); return; }
 
     try {
       setLoading(true);
-      const res = await fetchWithTimeout(
-        `${API_BASE}/api/recipes/prepare`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({ ingredients: items }),
-        },
-        30000
-      );
+      const res = await fetch(`${API_BASE}/api/recipes/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ ingredients: items }), // 옵션 제거: timeMax/servings 안 보냄
+      });
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status} ${text?.slice(0, 200)}`);
       }
 
-      const text = await res.text();
-      const clean = text.replace(/```json|```/g, "").trim();
+      const rawText = await res.text();
+      let json;
+      try { json = extractJson(rawText); }
+      catch (e) {
+        console.warn("[ParseFail] raw preview:", rawText?.slice(0, 400));
+        throw e;
+      }
 
-      // API가 객체 하나를 주거나, 배열을 줄 수 있음
-      const json = JSON.parse(clean);
       const arr = Array.isArray(json) ? json : [json];
+      const norm = arr.map((it, idx) => normalizeResult(it, idx)).filter(
+        r => (r.ingredients?.length || r.steps?.length || r.name !== "(제목 없음)")
+      );
 
-      setResults(arr.map((it, idx) => normalizeResult(it, idx)));
+      if (!norm.length) {
+        setErr(t.failGen);
+        return;
+      }
+      setResults(norm);
     } catch (e) {
       const msg =
-        e?.name === "AbortError"
-          ? t.timeout
-          : String(e?.message || "").includes("Network request failed")
-          ? t.netFail
-          : String(e?.message || e);
+        String(e?.name) === "AbortError" ? t.timeout :
+        String(e?.message || "").includes("Network request failed") ? t.netFail :
+        t.failGen;
       setErr(msg);
       console.warn("[에러]", e);
     } finally {
@@ -210,6 +197,7 @@ export default function IngredientsSheet({ visible, onClose }) {
         <View style={styles.sheet}>
           <Text style={[styles.title, { fontFamily: font }]}>{t.title}</Text>
 
+          {/* 입력 & 추가 */}
           <View style={styles.row}>
             <TextInput
               value={input}
@@ -225,8 +213,9 @@ export default function IngredientsSheet({ visible, onClose }) {
             </TouchableOpacity>
           </View>
 
+          {/* 칩 */}
           <View style={styles.chips}>
-            {items.map((v) => (
+            {items.map(v => (
               <View key={v} style={styles.chip}>
                 <Text style={[styles.chipTxt, { fontFamily: font }]}>{v}</Text>
                 <TouchableOpacity onPress={() => removeItem(v)} style={styles.chipX}>
@@ -236,6 +225,7 @@ export default function IngredientsSheet({ visible, onClose }) {
             ))}
           </View>
 
+          {/* 액션 */}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.resetBtn} onPress={resetAll} disabled={loading}>
               <Text style={[styles.resetTxt, { fontFamily: font }]}>{t.reset}</Text>
@@ -245,11 +235,8 @@ export default function IngredientsSheet({ visible, onClose }) {
               onPress={requestRecipes}
               disabled={loading || !items.length}
             >
-              {loading ? (
-                <ActivityIndicator />
-              ) : (
-                <Text style={[styles.genTxt, { fontFamily: font }]}>{t.generate}</Text>
-              )}
+              {loading ? <ActivityIndicator /> :
+                <Text style={[styles.genTxt, { fontFamily: font }]}>{t.generate}</Text>}
             </TouchableOpacity>
           </View>
 
@@ -259,28 +246,24 @@ export default function IngredientsSheet({ visible, onClose }) {
             <>
               <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
               <ScrollView style={styles.resultScroll}>
-                {results.map((r) => (
+                {results.map(r => (
                   <View key={r.id} style={styles.card}>
                     <Text style={[styles.foodName, { fontFamily: font }]}>{r.name}</Text>
 
-                    {!!r.ingredients.length && (
+                    {!!r.ingredients?.length && (
                       <>
                         <Text style={[styles.sectionTitle, { fontFamily: font }]}>
                           {t.ingredients}
                         </Text>
                         {r.ingredients.map((line, i) => (
-                          <Text key={i} style={[styles.li, { fontFamily: font }]}>
-                            • {line}
-                          </Text>
+                          <Text key={i} style={[styles.li, { fontFamily: font }]}>• {line}</Text>
                         ))}
                       </>
                     )}
 
-                    {!!r.steps.length && (
+                    {!!r.steps?.length && (
                       <>
-                        <Text style={[styles.sectionTitle, { fontFamily: font }]}>
-                          {t.steps}
-                        </Text>
+                        <Text style={[styles.sectionTitle, { fontFamily: font }]}>{t.steps}</Text>
                         {r.steps.map((line, i) => (
                           <Text key={i} style={[styles.li, { fontFamily: font }]}>
                             {i + 1}. {line}
@@ -304,90 +287,31 @@ export default function IngredientsSheet({ visible, onClose }) {
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: "92%",
-  },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  sheet: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, maxHeight: "92%" },
   title: { fontSize: 18, marginBottom: 10 },
   row: { flexDirection: "row", gap: 8 },
-  input: {
-    flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-  },
-  addBtn: {
-    paddingHorizontal: 14,
-    minWidth: 72,
-    height: 44,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#222",
-  },
+  input: { flex: 1, height: 44, borderWidth: 1, borderColor: "#ddd", borderRadius: 10, paddingHorizontal: 12 },
+  addBtn: { paddingHorizontal: 14, minWidth: 72, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#222" },
   addTxt: { color: "#fff", fontSize: 14 },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f2f2f2",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  chip: { flexDirection: "row", alignItems: "center", backgroundColor: "#f2f2f2", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   chipTxt: { fontSize: 14 },
   chipX: { marginLeft: 6, paddingHorizontal: 4 },
   chipXTxt: { fontSize: 16, color: "#777" },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 14,
-  },
+  actions: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
   resetBtn: { paddingVertical: 10, paddingHorizontal: 10 },
   resetTxt: { color: "#666" },
-  genBtn: {
-    backgroundColor: "#ffe98a",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
+  genBtn: { backgroundColor: "#111", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 },
   genBtnDisabled: { opacity: 0.5 },
-  genTxt: { color: "#333", fontSize: 15 },
+  genTxt: { color: "#fff", fontSize: 15 },
   err: { marginTop: 8, color: "#d22" },
   resultTitle: { marginTop: 16, fontSize: 16 },
   resultScroll: { marginTop: 8, maxHeight: 360 },
-  card: {
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-  },
+  card: { borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, marginBottom: 12, backgroundColor: "#fff" },
   foodName: { fontSize: 18, marginBottom: 8, color: "#111" },
   sectionTitle: { fontSize: 15, marginTop: 6, marginBottom: 4, color: "#333" },
   li: { fontSize: 14, lineHeight: 22, color: "#333" },
-  closeBtn: {
-    alignSelf: "center",
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
+  closeBtn: { alignSelf: "center", marginTop: 12, paddingVertical: 10, paddingHorizontal: 16 },
   closeTxt: { color: "#333" },
 });
