@@ -30,7 +30,7 @@
       "expo-localization"
     ],
     "extra": {
-      "EXPO_PUBLIC_API_BASE": "http://192.168.219.58:8080"
+      "EXPO_PUBLIC_API_BASE": "http://192.168.219.57:8080"
     }
   }
 }
