@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const extra = Constants.expoConfig?.extra ?? {};
-const DEFAULT = Platform.OS === "android" ? "http://10.0.2.2:8080" : "http://localhost:8080";
+const DEFAULT = Platform.OS === "android" ? "http://192.168.219.57:8080" : "http://localhost:8080";
 
 // app.json → expo.extra.EXPO_PUBLIC_API_BASE 에 지정(실기기면 PC IP)
 export const ORIGIN = String(extra.EXPO_PUBLIC_API_BASE || DEFAULT).replace(/\/+$/, "");
