@@ -45,14 +45,28 @@ public class GeminiService {
                 "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt))))
         );
 
-        return web.post()
-                .uri(path, model)                       
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
-                .retrieve()
-                .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(60))
-                .block();
+        try {
+            Map<?,?> response = web.post()
+                    .uri(path, model)                       
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .bodyValue(body)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .timeout(Duration.ofSeconds(60))
+                    .block();
+            
+            // Gemini 응답 구조: candidates[0].content.parts[0].text
+            var candidates = (List<Map<?,?>>) response.get("candidates");
+            if (candidates == null || candidates.isEmpty()) {
+                throw new RuntimeException("Gemini 응답에 candidates가 없음");
+            }
+            var content = (Map<?,?>) candidates.get(0).get("content");
+            var parts = (List<Map<?,?>>) content.get("parts");
+            return (String) parts.get(0).get("text");
+        } catch (Exception e) {
+            log.error("Gemini 호출 실패", e);
+            throw new RuntimeException("Gemini 응답 파싱 실패: " + e.getMessage(), e);
+        }
     }
 }
