@@ -15,7 +15,7 @@ const translations = {
 
 const HEADER_SIZE = { ko: 31, en: 22, ja: 20 };
 const RECIPE_NAME_SIZE = { ko: 35, en: 22, ja: 22 };
-const CTA_SIZE = { ko: 30, en: 16, ja: 16 };
+const CTA_SIZE = { ko: 30, en: 20, ja: 16 };
 
 const foodList = [
   { key: 'bulgogi', image: require('../assets/food/bulgogi.png'), names: { ko: '불고기', en: 'Bulgogi', ja: 'プルコギ' } },

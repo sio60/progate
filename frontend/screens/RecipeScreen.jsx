@@ -6,26 +6,25 @@ import {
   StyleSheet,
   ImageBackground,
   ScrollView,
-  TouchableOpacity,
 } from "react-native";
 import HeaderLogo from "../components/HeaderLogo";
 import { useGlobalLang } from "../components/GlobalLang";
 import recipes from "../data/recipes";
 
-/** 언어별 폰트 크기 테이블 (원하면 여기 값만 조절) */
+/** 언어별 폰트 크기 (TTS용 listen 제거) */
 const SIZE = {
-  ko: { name: 35, section: 23, p: 25, listen: 18 },
-  en: { name: 22, section: 17, p: 17, listen: 15 },
-  ja: { name: 22, section: 16, p: 16, listen: 15 },
+  ko: { name: 35, section: 23, p: 25 },
+  en: { name: 22, section: 22, p: 17 },
+  ja: { name: 22, section: 16, p: 16 },
 };
 
 const tMap = {
-  ko: { ingredients: "재료", steps: "조리 과정", listen: "음성으로 듣기 →" },
-  en: { ingredients: "Ingredients", steps: "Steps", listen: "Listen →" },
-  ja: { ingredients: "材料", steps: "作り方", listen: "音声で聞く →" },
+  ko: { ingredients: "재료", steps: "조리 과정" },
+  en: { ingredients: "Ingredients", steps: "Steps" },
+  ja: { ingredients: "材料", steps: "作り方" },
 };
 
-export default function RecipeScreen({ route, navigation }) {
+export default function RecipeScreen({ route }) {
   const { food } = route.params || {};
   const { lang, font, footerH } = useGlobalLang();
   const t = useMemo(() => tMap[lang], [lang]);
@@ -41,12 +40,6 @@ export default function RecipeScreen({ route, navigation }) {
   return (
     <View style={[styles.container, { paddingBottom: footerH }]}>
       <HeaderLogo />
-
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.navigate("TTS", { food })}>
-          <Text style={[styles.listenText, F, L(sz.listen, 1.1)]}>{t.listen}</Text>
-        </TouchableOpacity>
-      </View>
 
       <ImageBackground
         source={food?.image}
@@ -71,7 +64,14 @@ export default function RecipeScreen({ route, navigation }) {
           </Text>
         ))}
 
-        <Text style={[styles.sectionTitle, F, L(sz.section, 1.12), { marginTop: 16 }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            F,
+            L(sz.section, 1.12),
+            { marginTop: 16 },
+          ]}
+        >
           {t.steps}
         </Text>
         {steps.map((s, i) => (
@@ -86,8 +86,6 @@ export default function RecipeScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingTop: 8 },
-  topBar: { paddingHorizontal: 16, paddingBottom: 6, alignItems: "flex-end" },
-  listenText: { color: "#111", includeFontPadding: false },
   cover: { width: "100%", height: 320, justifyContent: "flex-start" },
   foodName: {
     color: "#000",
