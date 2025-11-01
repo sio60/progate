@@ -61,7 +61,7 @@ const tMap = {
   },
 };
 
-// ── 유틸: 개행 정규화 + 멀티라인 렌더러 ──────────────────────────────
+/* ── 유틸: 개행 정규화 + 멀티라인 렌더러 ─────────────────────────── */
 const normalizeLB = (s = "") =>
   String(s)
     .replace(/\r\n?/g, "\n")
@@ -83,95 +83,222 @@ function ML({ text, style }) {
   );
 }
 
-// ── Gemini 응답에서 JSON 추출 ───────────────────────────────────────
-function extractJson(text) {
-  if (!text) throw new Error("EMPTY");
-  const cleaned = text.replace(/```json|```/g, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch (_) {}
+/* ── 수량/단위 포맷/파서 (프론트에서 라벨 만들기용) ─────────────────── */
+const fmtQty = (n) => {
+  if (n == null || isNaN(n)) return "";
+  return (Math.round(Number(n) * 10) / 10).toFixed(1);
+};
+// 단위 정규화 + kg→g 변환
+const normalizeUnitAndQty = (qty, unit) => {
+  let q = qty;
+  let u = (unit || "").toString().trim().toLowerCase();
 
-  const s = Math.min(
-    ...["[", "{"].map((c) => cleaned.indexOf(c)).filter((i) => i >= 0)
-  );
-  const e = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
-  if (s >= 0 && e > s) {
-    const slice = cleaned.slice(s, e + 1);
-    try {
-      return JSON.parse(slice);
-    } catch (_) {}
+  const U = {
+    l: "L",
+    liter: "L",
+    litres: "L",
+    liters: "L",
+    리터: "L",
+
+    ml: "ml",
+    milliliter: "ml",
+    milliliters: "ml",
+    밀리리터: "ml",
+
+    cup: "컵",
+    cups: "컵",
+    컵: "컵",
+
+    tbsp: "큰술",
+    tbs: "큰술",
+    tablespoon: "큰술",
+    tablespoons: "큰술",
+    t: "큰술",
+    "큰 술": "큰술",
+    큰술: "큰술",
+
+    tsp: "작은술",
+    teaspoon: "작은술",
+    teaspoons: "작은술",
+    "작은 술": "작은술",
+    작은술: "작은술",
+
+    g: "g",
+    gram: "g",
+    grams: "g",
+    그램: "g",
+
+    kg: "kg",
+    kilogram: "kg",
+    kilograms: "kg",
+    킬로그램: "kg",
+
+    ea: "개",
+    pc: "개",
+    pcs: "개",
+    piece: "개",
+    pieces: "개",
+    개: "개",
+
+    pinch: "꼬집",
+    꼬집: "꼬집",
+  };
+  if (U[u]) u = U[u];
+
+  if (u === "kg") {
+    q = Number(q) * 1000;
+    u = "g";
   }
-  throw new Error("BAD_JSON");
-}
+  return { qty: Number(q), unit: u };
+};
+// qty+unit 문구
+const fmtQtyAndUnit = (qty, unit) => {
+  if (qty == null) return "";
+  const { qty: q, unit: u } = normalizeUnitAndQty(Number(qty), unit);
+  if (u === "ml") return q >= 1000 ? `${fmtQty(q / 1000)} L` : `${fmtQty(q)} ml`;
+  if (u === "컵") {
+    const ml = q * 200;
+    return ml >= 1000 ? `${fmtQty(ml / 1000)} L` : `${fmtQty(ml)} ml`;
+  }
+  if (u === "L") return `${fmtQty(q)} L`;
+  return `${fmtQty(q)} ${u || ""}`.trim();
+};
+// 문자열에서 수치/단위 추출
+const fractionToFloat = (s) => {
+  if (!s) return null;
+  const map = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
+  if (map[s] != null) return map[s];
+  const str = String(s).trim();
+  const mix = str.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mix) return parseFloat(mix[1]) + parseFloat(mix[2]) / parseFloat(mix[3]);
+  const frac = str.match(/^(\d+)\/(\d+)$/);
+  if (frac) return parseFloat(frac[1]) / parseFloat(frac[2]);
+  const num = Number(str.replace(",", "."));
+  return isNaN(num) ? null : num;
+};
+const parseIngredientLine = (s) => {
+  if (!s) return null;
+  const line = s
+    .replace(/[•·\-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\([^)]*\)/g, "")
+    .trim();
 
-// ── 단계 텍스트를 1/2/3/4… 배열로 쪼개기 ───────────────────────────
+  const N = "(?:\\d+(?:[.,]\\d+)?|\\d+\\s+\\d+/\\d+|\\d+/\\d+|[½¼¾⅓⅔])";
+  const U =
+    "(L|l|리터|ml|밀리리터|컵|cups?|cup|큰\\s*술|큰술|tbsp|tbs|T|작은\\s*술|작은술|tsp|teaspoons?|teaspoon|g|그램|kg|킬로그램|ea|pcs?|piece|pieces|개|pinch|꼬집)";
+  let m = line.match(new RegExp(`^(.*?)\\s*(${N})\\s*${U}\\s*$`, "i"));
+  if (!m) {
+    m = line.match(new RegExp(`^(${N})\\s*${U}\\s*(.+)$`, "i"));
+    if (m) {
+      const num = fractionToFloat(m[1].replace(",", "."));
+      const unit = m[2];
+      const name = m[3].trim();
+      const { qty, unit: u } = normalizeUnitAndQty(num, unit);
+      return { name, qty, unit: u };
+    }
+  } else {
+    const name = m[1].trim();
+    const num = fractionToFloat(m[2].replace(",", "."));
+    const unit = m[3];
+    const { qty, unit: u } = normalizeUnitAndQty(num, unit);
+    return { name, qty, unit: u };
+  }
+  return { name: line, qty: null, unit: "" };
+};
+// 객체여도 없으면 name에서 다시 뽑기
+const ensureMeasured = (i) => {
+  if (!i) return i;
+  let { name, qty, unit } = i;
+  if (qty == null || !unit) {
+    const p = parseIngredientLine(name);
+    if (p?.qty != null) {
+      name = p.name || name;
+      qty = p.qty;
+      unit = p.unit;
+    }
+  } else {
+    const n = normalizeUnitAndQty(qty, unit);
+    qty = n.qty;
+    unit = n.unit;
+  }
+  return { name, qty, unit };
+};
+
+/* ── 단계 텍스트 분해 ───────────────────────────────────────────── */
 function tokenizeSteps(value) {
   if (!value) return [];
-
-  // 이미 배열인 경우
   if (Array.isArray(value)) {
     return value
       .map((s) => (typeof s === "string" ? s : s?.text))
       .filter(Boolean)
       .map((s) => s.trim());
   }
-
-  // 문자열인 경우
   if (typeof value === "string") {
     const cleaned = normalizeLB(value);
-
-    // 1) 우선 개행 기준 분해
     let parts = cleaned.split(/\n+/).map((s) => s.trim()).filter(Boolean);
     if (parts.length > 1) {
-      parts = parts
-        .map((s) => s.replace(/^\s*\d+[\.\)\-\s]\s*/, "").trim())
-        .filter(Boolean);
-    }
-
-    // 2) 여전히 한 줄이면  "1. " / "2) " / "3 - " 등 숫자 토큰으로 분해
-    if (parts.length <= 1 && /\d+[\.\)\-]\s/.test(cleaned)) {
+      parts = parts.map((s) => s.replace(/^\s*\d+[\.\)\-\s]\s*/, "").trim());
+    } else if (/\d+[\.\)\-]\s/.test(cleaned)) {
       parts = cleaned
         .replace(/^\s*\d+[\.\)\-]\s*/, "")
         .split(/\s+\d+[\.\)\-]\s+/g)
         .map((s) => s.trim())
         .filter(Boolean);
-    }
-
-    // 3) 그래도 한 덩어리면 문장 단위로 분해(마침표+공백)
-    if (parts.length <= 1) {
+    } else {
       parts = cleaned
         .split(/(?<=\.)\s+(?=[가-힣A-Za-z0-9])/g)
         .map((s) => s.trim())
         .filter(Boolean);
     }
-
     return parts;
   }
-
   return [];
 }
 
-// ── 정규화 ──────────────────────────────────────────────────────────
-function normalizeResult(raw, idx = 0) {
+/* ── 응답 정규화: 재료는 '라벨 문자열' 배열로 변환 ─────────────────── */
+const buildLabel = (name, qty, unit, fallbackLabel) => {
+  if (fallbackLabel && String(fallbackLabel).trim()) return String(fallbackLabel).trim();
+  const q = fmtQtyAndUnit(qty, unit);
+  return q ? `${name} ${q}`.trim() : name?.trim() || "";
+};
+
+const normalizeResult = (raw, idx = 0) => {
   const name = raw?.title || raw?.food || raw?.name || "(제목 없음)";
 
-  // 재료
+  // 재료 → 문자열 라벨 배열
   let ingredients = [];
   if (Array.isArray(raw?.ingredients)) {
     ingredients = raw.ingredients
       .map((i) => {
-        if (!i) return "";
-        const n = i.name ?? i.item ?? "";
-        const q = i.qty != null ? String(i.qty) : "";
-        const u = i.unit ?? "";
-        return [n, q, u].filter(Boolean).join(" ").trim();
+        if (!i) return null;
+        if (typeof i === "string") {
+          const p = ensureMeasured(parseIngredientLine(i));
+          return buildLabel(p.name, p.qty, p.unit);
+        }
+        const base = {
+          name: i.name ?? i.item ?? "",
+          qty:
+            typeof i.qty === "number"
+              ? i.qty
+              : i.qty
+              ? fractionToFloat(String(i.qty))
+              : null,
+          unit: i.unit ?? "",
+          label: i.label, // 혹시 모델이 label을 보냈다면 우선 사용
+        };
+        const fixed = ensureMeasured(base);
+        return buildLabel(fixed.name, fixed.qty, fixed.unit, base.label);
       })
-      .filter(Boolean);
+      .filter((s) => s && s.trim());
   }
   if (!ingredients.length && typeof raw?.ingredient === "string") {
     ingredients = raw.ingredient
       .split(/\r?\n|,|·|•/g)
-      .map((s) => s.trim())
+      .map((s) => {
+        const p = ensureMeasured(parseIngredientLine(s));
+        return buildLabel(p.name, p.qty, p.unit);
+      })
       .filter(Boolean);
   }
 
@@ -181,9 +308,9 @@ function normalizeResult(raw, idx = 0) {
   else if (raw?.recipe != null) steps = tokenizeSteps(raw.recipe);
 
   return { id: idx + 1, name, ingredients, steps };
-}
+};
 
-// ── 컴포넌트 ────────────────────────────────────────────────────────
+/* ── 컴포넌트 ───────────────────────────────────────────────────── */
 export default function IngredientsSheet({ visible, onClose }) {
   const { lang, font } = useGlobalLang();
   const t = useMemo(() => tMap[lang] ?? tMap.ko, [lang]);
@@ -197,14 +324,9 @@ export default function IngredientsSheet({ visible, onClose }) {
   const addItem = () => {
     const v = input.trim();
     if (!v) return;
-    if (items.includes(v)) {
-      setInput("");
-      return;
-    }
-    setItems((prev) => [...prev, v]);
+    if (!items.includes(v)) setItems((prev) => [...prev, v]);
     setInput("");
   };
-
   const removeItem = (v) => setItems((prev) => prev.filter((x) => x !== v));
   const resetAll = () => {
     setItems([]);
@@ -223,36 +345,20 @@ export default function IngredientsSheet({ visible, onClose }) {
 
     try {
       setLoading(true);
-      const raw = await apiPost("/api/recipes/prepare", { ingredients: items });
-      const rawText = typeof raw === "string" ? raw : JSON.stringify(raw);
-
-      console.log("🧪 Gemini 응답 rawText:\n", rawText);
-
-      let json;
-      try {
-        json = extractJson(rawText);
-      } catch (e) {
-        console.warn("[❌ JSON 파싱 실패]", e.message);
-        setErr(t.failGen);
-        return;
-      }
-
-      const arr = Array.isArray(json) ? json : [json];
+      const data = await apiPost("/api/recipes/prepare", { ingredients: items });
+      const arr = Array.isArray(data) ? data : [data];
       const norm = arr
         .map((it, idx) => normalizeResult(it, idx))
         .filter(
           (r) =>
-            r.ingredients?.length || r.steps?.length || r.name !== "(제목 없음)"
+            (r.ingredients?.length || r.steps?.length) &&
+            r.name !== "(제목 없음)"
         );
 
-      console.log("✅ 정규화 결과:", norm);
-
       if (!norm.length) {
-        console.warn("[⚠️ 정규화 실패] → 응답은 있었으나 내용 없음");
         setErr(t.failGen);
         return;
       }
-
       setResults(norm);
     } catch (e) {
       const msg =
@@ -330,10 +436,10 @@ export default function IngredientsSheet({ visible, onClose }) {
                         <Text style={[styles.sectionTitle, { fontFamily: font }]}>
                           {t.ingredients}
                         </Text>
-                        {r.ingredients.map((line, i) => (
+                        {r.ingredients.map((label, i) => (
                           <View key={i} style={styles.liRow}>
                             <Text style={[styles.bullet, { fontFamily: font }]}>•</Text>
-                            <ML text={line} style={[styles.liText, { fontFamily: font }]} />
+                            <ML text={label} style={[styles.liText, { fontFamily: font }]} />
                           </View>
                         ))}
                       </>
@@ -387,25 +493,14 @@ const styles = StyleSheet.create({
   err: { marginTop: 8, color: "#d22" },
   resultTitle: { marginTop: 16, fontSize: 16 },
   resultScroll: { marginTop: 8, maxHeight: 360 },
-
   card: { borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, marginBottom: 12, backgroundColor: "#fff" },
-  foodName: { fontSize: 18, marginBottom: 8, color: "#111" },
-  sectionTitle: { fontSize: 15, marginTop: 6, marginBottom: 8, color: "#333" },
-
-  // 리스트 레이아웃
+  foodName: { fontSize: 18, marginBottom: 6, color: "#111" },
+  sectionTitle: { fontSize: 15, marginTop: 8, marginBottom: 8, color: "#333" },
   liRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 6 },
   stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
-
   bullet: { width: 16, textAlign: "center", lineHeight: 22, color: "#333", marginTop: 1 },
   stepIdx: { width: 22, textAlign: "right", lineHeight: 22, color: "#333", marginTop: 1 },
-
-  liText: {
-    flex: 1,
-    lineHeight: 22,
-    color: "#333",
-    includeFontPadding: false,
-  },
-
+  liText: { flex: 1, lineHeight: 22, color: "#333", includeFontPadding: false },
   closeBtn: { alignSelf: "center", marginTop: 12, paddingVertical: 10, paddingHorizontal: 16 },
   closeTxt: { color: "#333" },
 });
