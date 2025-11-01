@@ -1,10 +1,10 @@
 package com.kfood.kfood_be.recipes.service;
 
-import org.springframework.stereotype.Component;
-
 import java.util.List;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
 
 /**
  * "정량 계량 강제" 프롬프트 (프롬프트만으로도 수치화를 유도)
@@ -101,5 +101,45 @@ public class PromptFactory {
 """);
 
         return sj.toString();
+    }
+
+    public String buildRecipeSearchPrompt(String query) {
+        return """
+                [역할]
+                당신은 한국 가정식 전문 셰프입니다. 요청된 요리 이름("%s")에 대한 실제 가능한 전통 또는 대중적 조리법을 제공합니다.
+
+                [목표]
+                사용자가 제시한 요리 이름에 대해 대표 레시피 1가지를 생성하세요.
+                한국식 가정 요리 스타일로 작성하고, 실제 가능한 조리 단계를 포함해야 합니다.
+
+                [제약]
+                - 출력은 오직 JSON 1개만.
+                - steps는 4~8단계로 구성.
+                - ingredients는 한국 기준 단위 사용 (개, 큰술, 작은술, g, ml 등).
+                - steps에는 반드시 불·타이밍·감각(예: 세게 달군다/숨이 죽기 전/불을 낮춘다/윤기/고소하게 등)을 포함.
+                - '무침'은 채소+양념 위주로 충분할 때만 선택.
+                - 설명, 코드블록, 마크다운, 이모지, 영어, 주석 금지.
+
+                [출력 JSON 스키마]
+                {
+                "title": "요리 이름",
+                "category": "탕|볶음|구이|조림|국|전|밥|면|기타",
+                "timeMin": number,
+                "servings": number,
+                "difficulty": "초급|중급|고급",
+                "ingredients": [
+                {"name": "재료명", "qty": number|null, "unit": "g|ml|개|큰술|작은술|null"}
+                ],
+                "steps": [
+                {"order": number, "text": "조리 과정 (불/타이밍/감각 표현 포함, 한국어)"}
+                ],
+                "chefNote": "짧은 한마디 조언",
+                "tip": "초보자 실패 방지 팁"
+                }
+
+                [중요]
+                - 출력은 JSON만.
+                - 생각, 설명, 마크다운 금지.
+                """.formatted(query);
     }
 }

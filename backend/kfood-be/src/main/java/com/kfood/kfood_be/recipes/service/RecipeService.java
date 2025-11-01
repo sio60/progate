@@ -1,14 +1,19 @@
 package com.kfood.kfood_be.recipes.service;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -112,5 +117,26 @@ public class RecipeService {
             out.add(RecipeResponseDto.Step.builder().order(order).text(txt).build());
         }
         return out;
+    }
+
+    public List<RecipeResponseDto> searchRecipeByName(String query) {
+        if (query == null || query.isBlank()) return Collections.emptyList();
+
+        // 1) 프롬프트 생성 (prepare와 동일하게 리스트로 감싸기)
+        String prompt = promptFactory.buildRecipeSearchPrompt(query);
+
+        // 1차 호출
+        String text = geminiService.generateText(prompt, 0.7);
+        log.info("Gemini 응답: {}", text);
+        List<RecipeResponseDto> parsed = parseAny(text);
+        if (!parsed.isEmpty()) return parsed;
+
+        // 2차 재시도
+        String text2 = geminiService.generateText(prompt, 0.3);
+        parsed = parseAny(text2);
+        if (!parsed.isEmpty()) return parsed;
+
+        log.warn("레시피 검색 실패: {}", query);
+        return Collections.emptyList();
     }
 }
