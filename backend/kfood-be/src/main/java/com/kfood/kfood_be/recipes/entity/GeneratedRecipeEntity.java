@@ -12,7 +12,7 @@ import lombok.*;
 public class GeneratedRecipeEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // Oracle 12c+ IDENTITY
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ID")
     private Long id;
 
