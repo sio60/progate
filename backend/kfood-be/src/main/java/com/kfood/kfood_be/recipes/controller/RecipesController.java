@@ -1,8 +1,9 @@
-package com.kfood.kfood_be.recipes.api;
+package com.kfood.kfood_be.recipes.controller;
 
 import com.kfood.kfood_be.recipes.dto.RecipeRequestDto;
 import com.kfood.kfood_be.recipes.dto.RecipeResponseDto;
-import com.kfood.kfood_be.recipes.app.RecipeService;
+import com.kfood.kfood_be.recipes.service.RecipeService;
+
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
