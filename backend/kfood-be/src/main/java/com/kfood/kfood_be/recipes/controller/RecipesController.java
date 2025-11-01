@@ -18,14 +18,6 @@ public class RecipesController {
 
     private final RecipeService recipeService;
 
-    /* 
-    POST /api/recipes/prepare
-    
-    {
-        "ingredients": ["김치", "마늘", "대파"]
-    }
-        
-    */
     @PostMapping("/prepare")
     public ResponseEntity<List<RecipeResponseDto>> prepareRecipes(
             @Valid @RequestBody RecipeRequestDto requestDto) {
