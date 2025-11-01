@@ -13,7 +13,7 @@ const tMap = {
 export default function TtsScreen({ route }) {
   const { food } = route.params || {};
   const { lang } = useGlobalLang();
-  const t = useMemo(() => tMap[lang], [lang]);
+  const t = useMemo(() => tMap[lang] || tMap.ko, [lang]);
 
   const r = recipes[food?.key];
   const ings = r?.[lang]?.ingredients ?? [];
@@ -24,6 +24,7 @@ export default function TtsScreen({ route }) {
     const headIngs = t.ingredients;
     const headSteps = t.steps;
     const stepLines = steps.map((s, i) => `${i + 1}) ${s}`);
+    // 한 줄씩 읽히도록 순서 구성
     return [name, headIngs, ...ings, headSteps, ...stepLines];
   }, [food, lang]);
 
