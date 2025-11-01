@@ -1,0 +1,34 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:oracle:thin:@//localhost:1521/XE
+    username: c##idev
+    password: 1234
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    hibernate:
+      ddl-auto: update  
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.OracleDialect
+  cache:
+    type: caffeine
+
+caffeine:
+  spec: maximumSize=1000,expireAfterWrite=10m
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: gemini-1.5-pro
+  endpoint: https://generativelanguage.googleapis.com/v1beta/models
+
+tts:
+  voice: ko-KR-Standard-A
+  speakingRate: 1.0
+  pitch: 0.0
+
+storage:
+  audioDir: ./data/audio
