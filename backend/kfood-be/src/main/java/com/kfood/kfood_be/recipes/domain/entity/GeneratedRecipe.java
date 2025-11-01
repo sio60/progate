@@ -1,44 +1,36 @@
 package com.kfood.kfood_be.recipes.domain.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
-
+@Entity
+@Table(name = "generated_recipe")
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(of = "id")
-@ToString
-@Entity
-@Table(name = "GENERATED_RECIPE")
 public class GeneratedRecipe {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "recipe_seq")
+    @SequenceGenerator(name = "recipe_seq", sequenceName = "RECIPE_SEQ", allocationSize = 1)
     private Long id;
 
-    @Column(name = "TITLE", length = 200)
-    private String title;
+    @Column(nullable = false)
+    private String food;
 
-    @Column(name = "TIME_MIN")
-    private Integer timeMin;
+    @Column(nullable = false)
+    private String ingredient;
 
-    @Lob
-    @Column(name = "RECIPE_JSON", columnDefinition = "CLOB")
-    private String recipeJson;
-
-    @Column(name = "AUDIO_URL", length = 300)
-    private String audioUrl;
-
-    @Column(name = "SOURCE", length = 40)
-    @Builder.Default
-    private String source = "gemini";
-
-    @Column(name = "CREATED_AT")
-    @Builder.Default
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+    @Column(length = 4000, nullable = false)
+    private String recipe;
 }
