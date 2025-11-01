@@ -7,192 +7,166 @@ import {
   Image,
   ScrollView,
   Modal,
+  Platform,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 
-// 다국어 문구
+const { width } = Dimensions.get('window');
+
 const translations = {
   ko: {
-    title: '오늘 뭐 먹지?',
+    title: '대표 한식 추천',
     detail: '자세히 보기',
-    time: '조리시간',
-    level: '난이도',
-    categories: ['🍲 국/찌개', '🥗 반찬', '🍙 밥/면', '🎎 명절요리'],
     langName: '한국어',
+    font: 'Unheo',
   },
   en: {
-    title: "What's for today?",
+    title: 'Korean Dishes',
     detail: 'View Recipe',
-    time: 'Cooking time',
-    level: 'Difficulty',
-    categories: ['🍲 Soup/Stew', '🥗 Side dish', '🍙 Rice/Noodles', '🎎 Holiday food'],
     langName: 'English',
+    font: 'Tegomin',
   },
   ja: {
-    title: '今日何食べる？',
+    title: '韓国料理おすすめ',
     detail: 'レシピを見る',
-    time: '調理時間',
-    level: '難易度',
-    categories: ['🍲 スープ/鍋', '🥗 おかず', '🍙 ご飯/麺', '🎎 伝統料理'],
     langName: '日本語',
+    font: 'Brush',
   },
 };
 
-export default function HomeScreen() {
-  const [lang, setLang] = useState('ko'); // 현재 언어: 'ko' | 'en' | 'ja'
-  const [showModal, setShowModal] = useState(false);
+const foodList = [
+  { name: '불고기', image: require('../assets/food/bulgogi.png') },
+  { name: '비빔밥', image: require('../assets/food/bibimbap.png') },
+  { name: '갈비', image: require('../assets/food/Galbi.png') },
+  { name: '김밥', image: require('../assets/food/gimbap.png') },
+  { name: '잡채', image: require('../assets/food/japchae.png') },
+  { name: '떡볶이', image: require('../assets/food/Tteokbokki.png') },
+  { name: '된장찌개', image: require('../assets/food/DoenjangJjigae.png') },
+  { name: '김치찌개', image: require('../assets/food/KimchiJjigae.png') },
+];
 
+export default function HomeScreen() {
+  const [lang, setLang] = useState('ko');
+  const [showModal, setShowModal] = useState(false);
   const t = translations[lang];
 
-  const randomRecipe = {
-    name: {
-      ko: '불고기',
-      en: 'Bulgogi',
-      ja: 'プルコギ',
-    },
-    time: '20분',
-    level: '★★☆☆☆',
-    image: 'https://www.foodsafetykorea.go.kr/uploadData/recipe/Q1/Q1_00024_img1.jpg',
+  const handleDetail = (foodName) => {
+    console.log('자세히 보기:', foodName);
+    // TODO: 레시피 상세 페이지 연결
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* 설정 버튼 */}
-      <TouchableOpacity
-        style={styles.settingButton}
-        onPress={() => setShowModal(true)}
-      >
-        <Text style={{ fontSize: 20 }}>⚙</Text>
-      </TouchableOpacity>
+    <View style={styles.container}>
+      <Text style={[styles.header, { fontFamily: t.font }]}>{t.title}</Text>
 
-      {/* 헤더 */}
-      <Text style={styles.header}>{t.title}</Text>
+      <FlatList
+        data={foodList}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(_, index) => index.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.slideCard}>
+            <Image source={item.image} style={styles.slideImage} />
+            <Text style={[styles.recipeName, { fontFamily: t.font }]}>{item.name}</Text>
+            <TouchableOpacity style={styles.button} onPress={() => handleDetail(item.name)}>
+              <Text style={styles.buttonText}>{t.detail}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      />
 
-      {/* 추천 레시피 카드 */}
-      <View style={styles.card}>
-        <Image source={{ uri: randomRecipe.image }} style={styles.cardImage} />
-        <Text style={styles.recipeName}>{randomRecipe.name[lang]}</Text>
-        <Text style={styles.recipeInfo}>
-          {t.time}: {randomRecipe.time} | {t.level}: {randomRecipe.level}
-        </Text>
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>{t.detail}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 카테고리 버튼 */}
-      <View style={styles.categoryContainer}>
-        {t.categories.map((label, idx) => (
-          <TouchableOpacity key={idx} style={styles.categoryButton}>
-            <Text style={styles.categoryText}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* 언어 설정 모달 */}
+      {/* 언어 선택 모달 */}
       <Modal visible={showModal} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          onPress={() => setShowModal(false)}
-          activeOpacity={1}
-        >
+        <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowModal(false)} activeOpacity={1}>
           <View style={styles.modalContent}>
             {Object.keys(translations).map((code) => (
               <TouchableOpacity
                 key={code}
-                style={[
-                  styles.langButton,
-                  lang === code && styles.langButtonActive,
-                ]}
+                style={[styles.langButton, lang === code && styles.langButtonActive]}
                 onPress={() => {
                   setLang(code);
                   setShowModal(false);
                 }}
               >
-                <Text style={styles.langText}>{translations[code].langName}</Text>
+                <Text style={[styles.langText, { fontFamily: translations[code].font }]}> {translations[code].langName}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </TouchableOpacity>
       </Modal>
-    </ScrollView>
+
+      {/* 하단 메뉴 */}
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.footerIcon}>
+          <Image source={require('../assets/icons/recipe.png')} style={styles.iconImg} />
+          <Text style={[styles.footerText, { fontFamily: t.font }]}>재료 입력</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerIcon}>
+          <Image source={require('../assets/icons/search.png')} style={styles.iconImg} />
+          <Text style={[styles.footerText, { fontFamily: t.font }]}>레시피 검색</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerIcon}>
+          <Image source={require('../assets/icons/watch.png')} style={styles.iconImg} />
+          <Text style={[styles.footerText, { fontFamily: t.font }]}>한식 둘러보기</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerIcon} onPress={() => setShowModal(true)}>
+          <Image source={require('../assets/icons/set.png')} style={styles.iconImg} />
+          <Text style={[styles.footerText, { fontFamily: t.font }]}>설정</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#fffceb',
-  },
-  settingButton: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    zIndex: 10,
+    backgroundColor: '#fff',
+    paddingTop: 60,
   },
   header: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
-    marginTop: 20,
+    marginLeft: 20,
     marginBottom: 20,
-    color: '#444',
+    color: '#333',
   },
-  card: {
+  slideCard: {
+    width: width - 60,
+    marginHorizontal: 10,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 30,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
     elevation: 4,
   },
-  cardImage: {
+  slideImage: {
     width: '100%',
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 12,
+    height: 250,
+    borderRadius: 12,
+    resizeMode: 'cover',
+    marginBottom: 10,
   },
   recipeName: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  recipeInfo: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
+    fontSize: 20,
+    marginBottom: 10,
+    color: '#222',
   },
   button: {
     backgroundColor: '#ffc149',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    alignItems: 'center',
   },
   buttonText: {
     color: '#333',
     fontWeight: '600',
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  categoryButton: {
-    backgroundColor: '#ffe98a',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    width: '48%',
-    alignItems: 'center',
-  },
-  categoryText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
@@ -217,5 +191,29 @@ const styles = StyleSheet.create({
   langText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'android' ? 30 : 10,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 14,
+  },
+  footerIcon: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  iconImg: {
+    width: 24,
+    height: 24,
+    marginBottom: 4,
+    resizeMode: 'contain',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#333',
   },
 });

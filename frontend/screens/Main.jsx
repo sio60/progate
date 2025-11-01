@@ -12,6 +12,12 @@ const languageText = {
   jp: 'レシピをもらう',
 };
 
+const fontMap = {
+  ko: 'Unheo',
+  en: 'Brush',
+  jp: 'Tegomin',
+};
+
 export default function Main({ navigation }) {
   const [lang, setLang] = useState('ko');
   const [modalVisible, setModalVisible] = useState(false);
@@ -46,7 +52,7 @@ export default function Main({ navigation }) {
           style={styles.logo}
         />
         <TouchableOpacity style={styles.button} onPress={handleStart}>
-          <Text style={[styles.buttonText, { fontFamily: 'Unheo' }]}>
+          <Text style={[styles.buttonText, { fontFamily: fontMap[lang] }]}>
             {languageText[lang]}
           </Text>
         </TouchableOpacity>
@@ -55,15 +61,15 @@ export default function Main({ navigation }) {
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalBackground}>
           <View style={styles.modalContainer}>
-            <Text style={[styles.modalTitle, { fontFamily: 'Unheo' }]}>언어 선택</Text>
+            <Text style={[styles.modalTitle, { fontFamily: fontMap[lang] }]}>언어 선택</Text>
             <TouchableOpacity onPress={() => changeLanguage('ko')}>
               <Text style={[styles.modalOption, { fontFamily: 'Unheo' }]}>한국어</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => changeLanguage('en')}>
-              <Text style={[styles.modalOption, { fontFamily: 'Unheo' }]}>English</Text>
+              <Text style={[styles.modalOption, { fontFamily: 'Brush' }]}>English</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => changeLanguage('jp')}>
-              <Text style={[styles.modalOption, { fontFamily: 'Unheo' }]}>日本語</Text>
+              <Text style={[styles.modalOption, { fontFamily: 'Tegomin' }]}>日本語</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -102,14 +108,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   button: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     paddingVertical: 12,
     paddingHorizontal: 36,
     borderRadius: 12,
   },
   buttonText: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 40,
     color: '#4b371f',
   },
   modalBackground: {
@@ -127,17 +131,11 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
     marginBottom: 16,
   },
   modalOption: {
     fontSize: 16,
     marginVertical: 8,
     color: '#333',
-  },
-  modalClose: {
-    marginTop: 20,
-    fontSize: 14,
-    color: '#888',
   },
 });
