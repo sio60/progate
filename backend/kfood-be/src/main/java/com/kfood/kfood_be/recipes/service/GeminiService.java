@@ -1,36 +1,58 @@
 package com.kfood.kfood_be.recipes.service;
 
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class GeminiService {
-    @Value("${gemini.api-key}") String apiKey;
-    @Value("${gemini.model}") String model;
-    @Value("${gemini.endpoint}") String endpoint;
 
-    private final WebClient web = WebClient.builder().build();
+    @Value("${gemini.api-key}") private String apiKey;
+    @Value("${gemini.model}")   private String model;
+    @Value("${gemini.endpoint:https://generativelanguage.googleapis.com/v1}")
+    private String endpoint;
+
+    private WebClient web;
+
+    @PostConstruct
+    void init() {
+        HttpClient http = HttpClient.create()
+                .responseTimeout(Duration.ofSeconds(60))
+                .compress(true);
+
+        this.web = WebClient.builder()
+                .baseUrl(endpoint)                    
+                .defaultHeader("x-goog-api-key", apiKey) 
+                .clientConnector(new ReactorClientHttpConnector(http))
+                .build();
+
+        log.info("[Gemini] bean ready. endpoint={}, model={}", endpoint, model);
+    }
 
     public String generateText(String prompt) {
-        String url = "%s/%s:generateContent?key=%s".formatted(endpoint, model, apiKey);
-        Map<String,Object> req = Map.of(
-                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))))
-        ;
+        String path = "/models/{model}:generateContent";
+        Map<String, Object> body = Map.of(
+                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt))))
+        );
 
-        Map<?,?> body = web.post().uri(url).bodyValue(req)
-                .retrieve().bodyToMono(Map.class).block();
-
-        try {
-            var candidates = (List<Map<?,?>>) body.get("candidates");
-            var content = (Map<?,?>) candidates.get(0).get("content");
-            var parts = (List<Map<?,?>>) content.get("parts");
-            return (String) parts.get(0).get("text");
-        } catch (Exception e) {
-            throw new RuntimeException("Gemini 응답 파싱 실패", e);
-        }
+        return web.post()
+                .uri(path, model)                       
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .timeout(Duration.ofSeconds(60))
+                .block();
     }
 }
