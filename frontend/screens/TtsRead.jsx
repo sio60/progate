@@ -1,6 +1,6 @@
 // screens/TtsRead.jsx
 import React, { useEffect, useRef, useState } from "react";
-import { View, StyleSheet, Image, ImageBackground, TouchableOpacity, Platform } from "react-native";
+import { View, StyleSheet, Image, ImageBackground, TouchableOpacity, Platform, Animated, Easing } from "react-native";
 import * as Speech from "expo-speech";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGlobalLang } from "../components/GlobalLang";
@@ -8,7 +8,7 @@ import { useGlobalLang } from "../components/GlobalLang";
 const LOCALE = { ko: "ko-KR", en: "en-US", ja: "ja-JP" };
 
 /** 로고 위치 미세조정: 음수면 위로, 양수면 아래로 */
-const LOGO_SHIFT = -28; // ← 필요하면 -20, -10, 0 등으로 더 내리면 됨
+const LOGO_SHIFT = -8;
 
 /** 더 느리고 낮은 할머니 톤 */
 function grandmaTone(lg) {
@@ -45,6 +45,21 @@ export default function TtsRead({ route }) {
   const [idx, setIdx] = useState(0);
   const voicesRef = useRef([]);
 
+  // ── Progress bar state (px width 애니메이션)
+  const [trackW, setTrackW] = useState(0);
+  const fillW = useRef(new Animated.Value(0)).current;
+
+  const animateProgress = (index) => {
+    if (!trackW || !steps.length) return;
+    const pct = (index + 1) / steps.length; // 1부터 표시
+    Animated.timing(fillW, {
+      toValue: trackW * pct,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  };
+
   const speakLine = async (i = idx) => {
     const text = String(steps[i] ?? "").trim();
     if (!text) return;
@@ -67,11 +82,17 @@ export default function TtsRead({ route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // idx/트랙폭/총 스텝 변할 때 진행바 업데이트
+  useEffect(() => {
+    animateProgress(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, trackW, steps.length]);
+
   const goPrev   = () => { const i = Math.max(0, idx - 1); setIdx(i); setTimeout(() => speakLine(i), 0); };
   const goRepeat = () => speakLine(idx);
   const goNext   = () => { const i = Math.min((steps.length - 1), idx + 1); setIdx(i); setTimeout(() => speakLine(i), 0); };
 
-  // 푸터에 가리지 않도록 아래 여백 확보(조금 더 크게)
+  // 푸터에 가리지 않도록 아래 여백 확보
   const bottomOffset = Math.max(64, footerH + insets.bottom + 24);
 
   return (
@@ -80,12 +101,20 @@ export default function TtsRead({ route }) {
       style={[styles.bg, { paddingTop: insets.top + 16 }]}
       imageStyle={styles.bgImg}
     >
-      {/* 로고 (조금 아래로) */}
+      {/* 로고 */}
       <View style={styles.hero}>
         <Image source={require("../assets/icons/logo.png")} style={styles.logo} />
+
+        {/* 진행 바 (로고 아래) */}
+        <View
+          style={styles.progressTrack}
+          onLayout={e => setTrackW(e.nativeEvent.layout.width)}
+        >
+          <Animated.View style={[styles.progressFill, { width: fillW }]} />
+        </View>
       </View>
 
-      {/* 아이콘 컨트롤만 표시 (배경/테두리 없음) */}
+      {/* 아이콘 컨트롤 (배경/테두리 없음) */}
       <View style={[styles.controlsWrap, { bottom: bottomOffset }]} pointerEvents="box-none">
         <View style={styles.controls}>
           <TouchableOpacity onPress={goPrev}  hitSlop={{ top:12,bottom:12,left:16,right:16 }}>
@@ -113,9 +142,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "stretch",
     paddingTop: 24,
-    transform: [{ translateY: LOGO_SHIFT }], // ← 여기 숫자만 조절해서 미세이동
+    transform: [{ translateY: LOGO_SHIFT }],
   },
   logo: { width: 420, height: 420, resizeMode: "contain", alignSelf: "center" },
+
+  // 진행 바 스타일 (멜로 느낌: 얇고 둥글고 흰 트랙/검정 채움)
+  progressTrack: {
+    width: "70%",
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.75)",
+    overflow: "hidden",
+    marginTop: 6,          // 로고와 간격
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#111",
+    borderRadius: 999,
+  },
 
   controlsWrap: {
     position: "absolute",
