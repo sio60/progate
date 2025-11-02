@@ -1,6 +1,7 @@
 package com.kfood.kfood_be.recipes.dto;
 
 import lombok.*;
+
 import java.util.List;
 
 @Getter @Setter
@@ -19,10 +20,9 @@ public class RecipeResponseDto {
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
     public static class Ingredient {
-        private String name;     // 재료명(숫자/단위 없음)
-        private Double qty;      // 수량(소수 OK)
-        private String unit;     // g|ml|개|컵|큰술|작은술|꼬집
-        private String label;    // "간장 1.5 큰술" 같은 표시용
+        private String name;
+        private Integer qty;
+        private String unit;
     }
 
     @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
