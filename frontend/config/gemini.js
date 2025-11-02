@@ -1,4 +1,3 @@
-// config/gemini.js
 import Constants from "expo-constants";
 
 /** ───────────────── 키/모델 로딩 ───────────────── */
@@ -298,4 +297,180 @@ export async function listModels() {
   if (!res.ok) throw new Error(`ListModels HTTP ${res.status}`);
   const j = await res.json();
   return j?.models?.map((m) => m.name) ?? [];
+}
+// ⬇️ config/gemini.js 맨 아래쪽(다른 export들 아래)에 붙여넣기
+export async function generateAiRecipeByName({
+  dish,
+  lang = "ko",
+  servings = 2,
+  timeMax = 60,
+}) {
+  if (!dish || !String(dish).trim()) {
+    throw new Error("dish is required");
+  }
+  if (!KEY) {
+    throw new Error("Gemini API key is missing (EXPO_PUBLIC_GEMINI_API_KEY).");
+  }
+
+  const target = LANG_NAME[lang] || "Korean";
+
+  // 프롬프트: 정확히 UI가 기대하는 스키마로 강제
+  const prompt = `
+You are a professional home-style Korean food assistant.
+User wants a detailed recipe for the dish by name.
+
+Return STRICT JSON ONLY (no markdown, no extra text) in ${target} with this schema:
+
+{
+  "title": string,          // dish name in ${target}
+  "category": string,       // e.g., stew, noodle, stir-fry (localized)
+  "timeMin": integer,       // total time in minutes
+  "servings": integer,      // default ${servings}
+  "difficulty": string,     // e.g., Easy / Medium / Hard (localized)
+  "ingredients": [          // structured list; localize units
+    { "name": string, "qty": number, "unit": string }
+  ],
+  "steps": [
+    { "order": integer, "text": string }
+  ]
+}
+
+Constraints:
+- Dish name: "${String(dish).trim()}"
+- Language: ${target} (all fields)
+- Servings ≈ ${servings}, total time ≈ ${timeMax} minutes.
+- Prefer authentic, home-style Korean approach.
+- Use pantry staples when needed (oil, salt, pepper, soy sauce, sugar, garlic).
+- Keep numbers consistent and realistic.
+- Localize units:
+  ko: 컵 / 큰술 / 작은술 / g / ml
+  en: cup / Tbsp / tsp / g / ml
+  ja: カップ / 大さじ / 小さじ / g / ml
+`;
+
+  const body = {
+    generationConfig: {
+      temperature: 0.6,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json",
+      // v1beta: responseSchema는 additionalProperties 없이 선언
+      responseSchema: {
+        type: "object",
+        required: [
+          "title",
+          "category",
+          "timeMin",
+          "servings",
+          "difficulty",
+          "ingredients",
+          "steps",
+        ],
+        properties: {
+          title: { type: "string" },
+          category: { type: "string" },
+          timeMin: { type: "integer" },
+          servings: { type: "integer" },
+          difficulty: { type: "string" },
+          ingredients: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["name"],
+              properties: {
+                name: { type: "string" },
+                qty: { type: "number" },
+                unit: { type: "string" },
+              },
+            },
+          },
+          steps: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["text"],
+              properties: {
+                order: { type: "integer" },
+                text: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  };
+
+  const res = await fetchWithTimeout(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    timeout: 30000,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.warn("[gemini] HTTP fail:", res.status, text || res.statusText);
+    if (res.status === 404)
+      throw new Error(`[Gemini] Model not found on v1beta: "${MODEL}"`);
+    if (res.status === 403)
+      throw new Error(
+        "[Gemini] Permission or quota issue (403). Check key & API enablement."
+      );
+    throw new Error(`[Gemini] HTTP ${res.status}`);
+  }
+
+  const json = await res.json();
+  const txt = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const data = tryParseJson(txt);
+  if (!data) throw new Error("Failed to parse JSON from Gemini (by name).");
+
+  // 보정: 문자열로 온 재료/단계도 안전하게 구조화
+  const normIng = (x) => {
+    if (!x) return null;
+    if (typeof x === "string") return { name: x, qty: null, unit: null };
+    const name = String(x.name ?? "").trim();
+    let qty = x.qty;
+    if (typeof qty === "string") {
+      const f = parseFloat(qty.replace(/[^\d.]/g, ""));
+      qty = isNaN(f) ? null : f;
+    }
+    if (typeof qty !== "number" || isNaN(qty)) qty = null;
+    const unit = x.unit != null ? String(x.unit).trim() : null;
+    return name ? { name, qty, unit } : null;
+  };
+
+  const normStep = (x, i) => {
+    if (!x) return null;
+    if (typeof x === "string")
+      return { order: i + 1, text: x.trim() };
+    const text = String(x.text ?? "").trim();
+    const order =
+      typeof x.order === "number" && x.order > 0 ? x.order : i + 1;
+    return text ? { order, text } : null;
+  };
+
+  const ingredients = Array.isArray(data.ingredients)
+    ? data.ingredients.map(normIng).filter(Boolean)
+    : [];
+
+  const steps = Array.isArray(data.steps)
+    ? data.steps.map(normStep).filter(Boolean)
+    : [];
+
+  return {
+    title: String(data.title ?? "").trim(),
+    category: String(data.category ?? "").trim(),
+    timeMin:
+      typeof data.timeMin === "number" && data.timeMin >= 0
+        ? Math.round(data.timeMin)
+        : null,
+    servings:
+      typeof data.servings === "number" && data.servings > 0
+        ? Math.round(data.servings)
+        : servings,
+    difficulty: String(data.difficulty ?? "").trim(),
+    ingredients,
+    steps,
+  };
 }
