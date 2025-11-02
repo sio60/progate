@@ -82,8 +82,8 @@ export default function TtsPlayer({
         if (!text) continue;
 
         await speakOnce(text, {
-          language: locale,                            // 언어코드 항상 전달
-          ...(selectedVoiceId ? { voice: selectedVoiceId } : {}), // 선택 보이스가 있으면 지정
+          language: locale,
+          ...(selectedVoiceId ? { voice: selectedVoiceId } : {}),
           rate: defaults.rate,
           pitch: defaults.pitch,
         }, debug);
