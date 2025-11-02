@@ -6,48 +6,91 @@ import { useGlobalLang } from "../components/GlobalLang";
 import TtsPlayer from "../components/TtsPlayer";
 
 const tMap = {
-  ko: { title: "MZ 유행어 사전", cat:{react:"감탄/반응",compliment:"칭찬/격려",complain:"불만/현타",dating:"연애/썸",money:"돈/가성비",work:"공부/일"}, play:"재생" },
-  en: { title: "MZ Slang by Situation", cat:{react:"Reactions",compliment:"Compliments",complain:"Gripes",dating:"Dating",money:"Money/Value",work:"Study/Work"}, play:"Play" },
-  ja: { title: "MZ流 行語（状況別）", cat:{react:"リアクション",compliment:"ほめ/励まし",complain:"不満/メンタル",dating:"恋愛/ソム",money:"お金/コスパ",work:"勉強/仕事"}, play:"再生" },
+  ko: {
+    title: "MZ 유행어 사전",
+    cat: { react: "감탄/반응", compliment: "칭찬/격려", complain: "불만/현타", dating: "연애/썸", money: "돈/가성비", work: "공부/일" },
+    play: "재생",
+  },
+  en: {
+    title: "MZ Slang by Situation",
+    cat: { react: "Reactions", compliment: "Compliments", complain: "Gripes", dating: "Dating", money: "Money/Value", work: "Study/Work" },
+    play: "Play",
+  },
+  ja: {
+    title: "MZ流 行語（状況別）",
+    cat: { react: "リアクション", compliment: "ほめ/励まし", complain: "不満/メンタル", dating: "恋愛/ソム", money: "お金/コスパ", work: "勉強/仕事" },
+    play: "再生",
+  },
 };
 
-// ★ ROMA(영문 표기) 추가: 영어 UI에서만 노출
+/** 
+ * 슬랭 항목 스키마
+ *  { id, ko, romaEn, kanaJa, en, ja }
+ *   - ko: 원문(한국어)
+ *   - romaEn: 영어권 발음용 로마자(영어 TTS로 읽음)
+ *   - kanaJa: 일본어권 발음용 가타카나(일본 TTS로 읽음)
+ *   - en/ja: 뜻(설명)
+ */
 const SLANG = {
   react: [
-    { id:"r1", ko:"개추",   romaEn:"gae-chu",        en:"Huge upvote / strongly recommend.", ja:"超おすすめ。" },
-    { id:"r2", ko:"실화냐", romaEn:"sil-hwa-nya",   en:"For real? / Are you serious?",      ja:"マジで？本当？" },
-    { id:"r3", ko:"개웃겨", romaEn:"gae-ut-ggyeo",  en:"That’s hilarious.",                 ja:"めっちゃウケる。" },
-    { id:"r4", ko:"ㄹㅇ",   romaEn:"real (abbr.)",  en:"For real (abbr.).",                 ja:"ガチで。" },
+    { id:"r1",  ko:"개추",       romaEn:"gae-chu",                kanaJa:"ゲチュ",                en:"Huge upvote / strongly recommend.", ja:"超おすすめ。" },
+    { id:"r2",  ko:"실화냐",     romaEn:"sil-hwa-nya?",           kanaJa:"シルファニャ？",        en:"For real? Are you serious?",       ja:"マジで？本当？" },
+    { id:"r3",  ko:"개웃겨",     romaEn:"gae-ut-ggyeo",           kanaJa:"ゲウッキョ",            en:"That’s hilarious.",                ja:"めっちゃウケる。" },
+    { id:"r4",  ko:"ㄹㅇ",       romaEn:"real",                   kanaJa:"リアル",                en:"For real (abbr.).",                ja:"ガチで。" },
+    { id:"r5",  ko:"ㅇㅈ",       romaEn:"injeong",                kanaJa:"インジョン",            en:"Agree / valid.",                   ja:"それな / 同意。" },
+    { id:"r6",  ko:"킹받네",     romaEn:"king-bad-ne",            kanaJa:"キングバンネ",          en:"That’s so infuriating (kinda funny).", ja:"イラつく（ネタ気味）。" },
+    { id:"r7",  ko:"ㅋㅋ루삥뽕", romaEn:"kku-kku ru-pping-ppong", kanaJa:"クック ルピングポン",    en:"LOL (meme-ish laugh).",            ja:"（ネタ系の）大笑い。" },
+    { id:"r8",  ko:"???",        romaEn:"question mark vibe",     kanaJa:"ハテナバイブ",          en:"Confused vibe.",                   ja:"困惑の雰囲気。" },
   ],
   compliment: [
-    { id:"c1", ko:"갓생 산다", romaEn:"gat-saeng sanda", en:"Living a god-tier disciplined life.", ja:"神レベルに規則正しい生活。" },
-    { id:"c2", ko:"미쳤다",    romaEn:"mi-chyeot-da",    en:"That’s insane(ly good).",             ja:"クオリティやばい。" },
-    { id:"c3", ko:"찢었다",    romaEn:"jjijeot-da",      en:"You crushed it / nailed it.",         ja:"ぶちかました / 大成功。" },
-    { id:"c4", ko:"존잘/존예",  romaEn:"jon-jal / jon-ye", en:"Super handsome / super pretty.",    ja:"超イケメン / 超美人。" },
+    { id:"c1", ko:"갓생 산다",   romaEn:"gat-saeng sanda",        kanaJa:"ガッセン サンダ",        en:"Living a god-tier disciplined life.", ja:"神レベルに規則正しい生活。" },
+    { id:"c2", ko:"미쳤다",      romaEn:"mi-chyeot-da",           kanaJa:"ミチョッタ",            en:"That’s insane(ly good).",           ja:"クオリティやばい。" },
+    { id:"c3", ko:"찢었다",      romaEn:"jji-jeot-da",            kanaJa:"ッチジョッタ",           en:"You crushed it / nailed it.",       ja:"ぶちかました / 大成功。" },
+    { id:"c4", ko:"존잘/존예",    romaEn:"jon-jal / jon-ye",       kanaJa:"ジョンジャル / ジョンイェ", en:"Super handsome / super pretty.",  ja:"超イケメン / 超美人。" },
+    { id:"c5", ko:"레게노",      romaEn:"lege-no (legend)",       kanaJa:"レゲノ",                en:"Legend(ary).",                      ja:"レジェンド級。" },
+    { id:"c6", ko:"금손",        romaEn:"geum-son",               kanaJa:"グムソン",              en:"Golden hands (very skilled).",      ja:"金の手（超上手）。" },
+    { id:"c7", ko:"고인물",      romaEn:"go-in-mul",              kanaJa:"ゴインムル",            en:"Veteran / very experienced.",       ja:"古参・ベテラン。" },
+    { id:"c8", ko:"인정",        romaEn:"injeong",                kanaJa:"インジョン",            en:"Respect / agreed.",                 ja:"リスペクト / 同意。" },
   ],
   complain: [
-    { id:"b1", ko:"현타 왔다", romaEn:"hyeon-ta wat-da", en:"Reality hit me / sudden slump.", ja:"現実に打ちのめされた感じ。" },
-    { id:"b2", ko:"멘붕",     romaEn:"men-bung",        en:"Mental breakdown.",               ja:"メンタル崩壊。" },
-    { id:"b3", ko:"노답",     romaEn:"nodap",           en:"No answer / hopeless.",           ja:"解決策なし / 絶望的。" },
-    { id:"b4", ko:"빡센데?",   romaEn:"ppak-sen-de?",    en:"That’s tough / brutal.",          ja:"きついね。" },
+    { id:"b1", ko:"현타 왔다",   romaEn:"hyeon-ta wat-da",        kanaJa:"ヒョンタ ワッタ",        en:"Reality hit me / sudden slump.",     ja:"現実に打ちのめされた感じ。" },
+    { id:"b2", ko:"멘붕",        romaEn:"men-bung",               kanaJa:"メンブン",              en:"Mental breakdown.",                   ja:"メンタル崩壊。" },
+    { id:"b3", ko:"노답",        romaEn:"nodap",                  kanaJa:"ノダプ",                en:"No answer / hopeless.",               ja:"解決策なし / 絶望的。" },
+    { id:"b4", ko:"빡센데?",     romaEn:"ppak-sen-de?",           kanaJa:"ッパクセンデ？",         en:"That’s tough / brutal.",              ja:"きついね。" },
+    { id:"b5", ko:"갑분싸",      romaEn:"gap-bun-ssa",            kanaJa:"カップンサ",            en:"Sudden awkward silence.",             ja:"急にシーンとなる空気。" },
+    { id:"b6", ko:"개노잼",      romaEn:"gae-no-jaem",            kanaJa:"ゲノジェム",            en:"Super boring.",                        ja:"超つまらん。" },
+    { id:"b7", ko:"현실 자각",   romaEn:"hyeon-sil jagak",        kanaJa:"ヒョンシル ジャガク",    en:"Reality check.",                      ja:"現実を思い知る。" },
+    { id:"b8", ko:"핵피곤",      romaEn:"haek-pi-gon",            kanaJa:"ヘクピゴン",            en:"Mega exhausted.",                      ja:"めっちゃ疲れた。" },
   ],
   dating: [
-    { id:"d1", ko:"썸 탄다",   romaEn:"sseom tanda",    en:"In a talking stage.",           ja:"いい感じの関係（恋愛一歩手前）。" },
-    { id:"d2", ko:"심쿵",     romaEn:"sim-kung",       en:"Heart-fluttering.",              ja:"胸きゅん。" },
-    { id:"d3", ko:"너 T야?",   romaEn:"neo ti-ya?",     en:"Are you a T? (MBTI meme).",     ja:"君、Tタイプ？（MBTIネタ）" },
-    { id:"d4", ko:"현웃 터짐", romaEn:"hyeon-ut teojim", en:"I literally laughed.",          ja:"思わず笑った。" },
+    { id:"d1", ko:"썸 탄다",     romaEn:"sseom tanda",            kanaJa:"ソム タンダ",            en:"In a talking stage.",                 ja:"いい感じの関係（恋愛一歩手前）。" },
+    { id:"d2", ko:"심쿵",        romaEn:"sim-kung",               kanaJa:"シムクン",              en:"Heart-fluttering.",                   ja:"胸きゅん。" },
+    { id:"d3", ko:"너 T야?",     romaEn:"neo ti-ya?",             kanaJa:"ノ ティヤ？",            en:"Are you a T? (MBTI meme).",           ja:"君、Tタイプ？（MBTIネタ）" },
+    { id:"d4", ko:"현웃 터짐",   romaEn:"hyeon-ut teojim",        kanaJa:"ヒョヌッ トジム",        en:"I literally laughed.",                ja:"思わず笑った。" },
+    { id:"d5", ko:"밀당",        romaEn:"mil-dang",               kanaJa:"ミルダン",              en:"Push & pull (playing hard to get).",  ja:"駆け引き。" },
+    { id:"d6", ko:"알고리즘 탔다", romaEn:"algorijeum tat-da",     kanaJa:"アルゴリズム タッタ",    en:"The algorithm shipped us (fate joke).", ja:"アルゴリズムの導き（ネタ）。" },
+    { id:"d7", ko:"솔탈",        romaEn:"sol-tal",                kanaJa:"ソルタル",              en:"Escaped single life.",                ja:"脱ソロ。" },
+    { id:"d8", ko:"사바사",      romaEn:"sa-ba-sa",               kanaJa:"サバサ",                en:"Case by case (depends).",             ja:"人それぞれ / ケースバイケース。" },
   ],
   money: [
-    { id:"m1", ko:"가심비",   romaEn:"ga-sim-bi",     en:"Satisfaction per price.",        ja:"満足度重視のコスパ。" },
-    { id:"m2", ko:"플렉스",   romaEn:"peul-lek-seu",  en:"Flex / splurge.",                ja:"見せつけ系の散財。" },
-    { id:"m3", ko:"탕진잼",   romaEn:"tangjin-jaem",  en:"Fun of blowing money.",          ja:"散財の楽しさ。" },
-    { id:"m4", ko:"혜자롭다",  romaEn:"hyeja-ropda",   en:"Super generous for the price.",  ja:"コスパ神。" },
+    { id:"m1", ko:"가심비",      romaEn:"ga-sim-bi",              kanaJa:"カシンビ",              en:"Satisfaction per price.",             ja:"満足度重視のコスパ。" },
+    { id:"m2", ko:"플렉스",      romaEn:"flex",                   kanaJa:"フレックス",            en:"Flex / splurge.",                     ja:"見せつけ系の散財。" },
+    { id:"m3", ko:"탕진잼",      romaEn:"tangjin-jaem",           kanaJa:"タンジンジェム",        en:"Fun of blowing money.",               ja:"散財の楽しさ。" },
+    { id:"m4", ko:"혜자롭다",     romaEn:"hyeja-rop-da",           kanaJa:"ヘジャロプダ",          en:"Super generous for the price.",       ja:"コスパ神。" },
+    { id:"m5", ko:"무지출",      romaEn:"mu-jichul",              kanaJa:"ムジチュル",            en:"No-spend challenge.",                 ja:"無支出チャレンジ。" },
+    { id:"m6", ko:"짠테크",      romaEn:"jjan-tech",              kanaJa:"ッチャンテク",          en:"Frugal financial hacks.",             ja:"節約テク。" },
+    { id:"m7", ko:"복포 탔다",    romaEn:"bok-po tat-da",          kanaJa:"ボッポ タッタ",         en:"Got company benefit points.",         ja:"福利厚生ポイント獲得。" },
+    { id:"m8", ko:"알잘딱깔센",   romaEn:"al-jal-ttak-kkal-sen",   kanaJa:"アルジャルッタクッカルセン", en:"Do it neatly & sensibly.",       ja:"手際よくセンス良く。" },
   ],
   work: [
-    { id:"w1", ko:"열정페이", romaEn:"yeoljeong-pay", en:"Underpaid ‘passion’ labor.",     ja:"情熱ペイ（低待遇の労働）。" },
-    { id:"w2", ko:"퇴근각",   romaEn:"toegeun-gak",   en:"Time to clock out.",             ja:"そろそろ退勤。" },
-    { id:"w3", ko:"학구라",   romaEn:"hak-gura",      en:"Sudden study grind mood.",       ja:"急に勉強モード。" },
-    { id:"w4", ko:"열공 모드", romaEn:"yeolgong modeu", en:"Hard-study mode.",             ja:"勉強ガチモード。" },
+    { id:"w1", ko:"열정페이",    romaEn:"yeoljeong-pay",          kanaJa:"ヨルジョンペイ",        en:"Underpaid ‘passion’ labor.",          ja:"情熱ペイ（低待遇の労働）。" },
+    { id:"w2", ko:"퇴근각",      romaEn:"toegeun-gak",            kanaJa:"トェグンガク",          en:"Time to clock out.",                   ja:"そろそろ退勤。" },
+    { id:"w3", ko:"학구라",      romaEn:"hak-gura",               kanaJa:"ハックラ",              en:"Sudden study grind mood.",             ja:"急に勉強モード。" },
+    { id:"w4", ko:"열공 모드",    romaEn:"yeol-gong modeu",        kanaJa:"ヨルゴン モドゥ",        en:"Hard-study mode.",                     ja:"勉強ガチモード。" },
+    { id:"w5", ko:"야근각",      romaEn:"ya-geun-gak",            kanaJa:"ヤグンガク",            en:"Looks like overtime.",                 ja:"残業の予感。" },
+    { id:"w6", ko:"칼퇴",        romaEn:"kal-toe",                kanaJa:"カルトェ",              en:"Leave work on the dot.",               ja:"定時退社。" },
+    { id:"w7", ko:"증명해라",    romaEn:"jeung-myeong-hae-ra",    kanaJa:"ジュンミョン ヘラ",      en:"Prove it (show results).",             ja:"証明してみろ。" },
+    { id:"w8", ko:"개발자 모드",  romaEn:"gaebalja modeu",         kanaJa:"ケバルジャ モドゥ",       en:"Developer mode on.",                   ja:"デベロッパーモードON。" },
   ],
 };
 
@@ -66,17 +109,16 @@ export default function YoutubeSearch() {
   const onSpeak = useCallback((text, l) => {
     setTtsLang(l);
     setTtsLines([text]);
-    setTtsKey(k => k + 1);
+    setTtsKey((k) => k + 1);
   }, []);
 
   const renderItem = ({ item }) => {
-    const showRoma = lang === "en"; // 영어 UI에서만 ROMA 라인 노출
+    const showRoma = lang === "en"; // 영어 UI에서만 ROMA 노출
+    const showKana = lang === "ja"; // 일본어 UI에서만 가타카나 발음 라인 노출
     return (
       <View style={styles.card}>
+        {/* KO 원문 타이틀 */}
         <Text style={[styles.ko, { fontFamily: font }]}>{item.ko}</Text>
-        <Text style={[styles.exp, { fontFamily: font }]}>
-          {/* 한국어 짧은 설명은 ko 기준 문장 그대로 두고, 뜻은 하단 EN/JA 라인에서 제공 */}
-        </Text>
 
         {/* KO 원문 → 한국어 억양 */}
         <View style={styles.line}>
@@ -87,7 +129,7 @@ export default function YoutubeSearch() {
           </TouchableOpacity>
         </View>
 
-        {/* EN UI일 때만: ROMA(영문 표기) — 영어 뜻 → 영어 억양 */}
+        {/* EN UI일 때: 로마자 발음(영어 TTS) + 영어 의미 */}
         {showRoma && (
           <View style={styles.line}>
             <Text style={[styles.label, { fontFamily: font }]}>[ROMA]</Text>
@@ -100,7 +142,7 @@ export default function YoutubeSearch() {
           </View>
         )}
 
-        {/* EN 의미 → 영어 억양 */}
+        {/* EN 의미 → 영어 억양 (뜻을 직접 듣고 싶을 때) */}
         <View style={styles.line}>
           <Text style={[styles.label, { fontFamily: font }]}>[EN]</Text>
           <Text style={[styles.txt, { fontFamily: font }]}>{item.en}</Text>
@@ -109,7 +151,18 @@ export default function YoutubeSearch() {
           </TouchableOpacity>
         </View>
 
-        {/* JA 번역 → 일본어 억양 */}
+        {/* JA UI일 때: 가타카나 발음(일본 TTS) + 일본어 의미 */}
+        {showKana && (
+          <View style={styles.line}>
+            <Text style={[styles.label, { fontFamily: font }]}>[JA-読み]</Text>
+            <Text style={[styles.txt, { fontFamily: font }]}>{item.kanaJa}</Text>
+            <TouchableOpacity style={styles.play} onPress={() => onSpeak(item.kanaJa, "ja")}>
+              <Text style={[styles.playTxt, { fontFamily: font }]}>▶ {t.play}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* JA 의미 → 일본어 억양 (뜻을 직접 듣고 싶을 때) */}
         <View style={styles.line}>
           <Text style={[styles.label, { fontFamily: font }]}>[JA]</Text>
           <Text style={[styles.txt, { fontFamily: font }]}>{item.ja}</Text>
@@ -164,13 +217,11 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: "#111", borderColor: "#111" },
   tabTxt: { fontSize: 13, color: "#333" },
   tabTxtActive: { color: "#fff" },
-
   list: { paddingBottom: 24, paddingTop: 8 },
   card: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f0f0f0", gap: 6 },
   ko: { fontSize: 18, color: "#111" },
-  exp: { fontSize: 13, color: "#666", marginTop: -2 },
   line: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2, flexWrap: "wrap" },
-  label: { fontSize: 12, color: "#999", width: 54 },
+  label: { fontSize: 12, color: "#999", width: 64 },
   txt: { flexShrink: 1, fontSize: 14, color: "#222" },
   play: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#111", marginLeft: "auto" },
   playTxt: { color: "#fff", fontSize: 12 },
