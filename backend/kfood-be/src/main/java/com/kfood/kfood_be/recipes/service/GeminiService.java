@@ -63,7 +63,9 @@ public class GeminiService {
                         "temperature", temperature,
                         "topP", 0.95,
                         "topK", 40,
-                        "maxOutputTokens", 2048,
+
+                        "maxOutputTokens", 4096,
+
                         // ❗️ API가 인식하는 정확한 키: snake_case
                         "response_mime_type", "application/json"
                 )
@@ -113,7 +115,7 @@ public class GeminiService {
                         "temperature", 0.2,       // 저온으로 일관성 ↑
                         "topP", 0.8,
                         "topK", 1,
-                        "maxOutputTokens", 2048,
+                        "maxOutputTokens", 4096,
                         "response_mime_type", "application/json",
                         "response_schema", schema // ✅ 스키마 강제
                 )
