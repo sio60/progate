@@ -86,7 +86,7 @@ function toIngredientLabel(it) {
   return [name, qtyUnit].filter(Boolean).join(" ") + note;
 }
 
-/** ───────────────── 메인 호출기 ─────────────────
+/** ───────────────── 단일언어 호출기 ─────────────────
  *  input: { ingredients: string[], lang?: 'ko'|'en'|'ja', servings?: number, timeMax?: number }
  *  return: { raw, name, ingredientsText[], steps[] }
  */
@@ -169,6 +169,125 @@ export async function generateAiRecipe({ ingredients, lang = "ko", servings = 2,
     ingredientsText,
     steps: Array.isArray(data.steps) ? data.steps.map((s) => String(s).trim()).filter(Boolean) : []
   };
+}
+
+/** ───────────────── 멀티랭 호출기(ko/en/ja 동시) ─────────────────
+ *  return: { byLang: { ko:{name,ingredients[],steps[]}, en:{...}, ja:{...} } }
+ */
+export async function generateAiRecipeMulti({ ingredients, servings = 2, timeMax = 60 }) {
+  if (!Array.isArray(ingredients) || ingredients.length === 0) {
+    throw new Error("ingredients must be a non-empty array");
+  }
+  if (!KEY) throw new Error("Gemini API key is missing (EXPO_PUBLIC_GEMINI_API_KEY).");
+
+  const list = ingredients.map((s) => `- ${s}`).join("\n");
+
+  const prompt = `
+You are a professional home-style Korean food assistant.
+Return strict JSON ONLY with three top-level keys: "ko", "en", "ja". No markdown, no extra text.
+
+For each locale, the schema is:
+{
+  "name": string,          // dish name in that language
+  "ingredients": string[], // each item already localized like "배추 300g" / "Cabbage 300 g" / "白菜 300g"
+  "steps": string[]        // short sequential steps in that language
+}
+
+Constraints:
+- Use user's ingredients when possible; pantry staples allowed (oil, salt, pepper, soy sauce, sugar, garlic).
+- Servings ≈ ${servings}, total time ≈ ${timeMax} minutes.
+- Keep numeric values consistent across locales. Localize units:
+  ko: 컵 / 큰술 / 작은술 / g / ml
+  en: cup / Tbsp / tsp / g / ml
+  ja: カップ / 大さじ / 小さじ / g / ml
+
+User ingredients:
+${list}
+`;
+
+  const body = {
+    generationConfig: {
+      temperature: 0.6,
+      topP: 0.95,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json",
+      // v1beta: additionalProperties 사용 금지
+      responseSchema: {
+        type: "object",
+        required: ["ko", "en", "ja"],
+        properties: {
+          ko: {
+            type: "object",
+            required: ["name", "ingredients", "steps"],
+            properties: {
+              name: { type: "string" },
+              ingredients: { type: "array", items: { type: "string" } },
+              steps: { type: "array", items: { type: "string" } }
+            }
+          },
+          en: {
+            type: "object",
+            required: ["name", "ingredients", "steps"],
+            properties: {
+              name: { type: "string" },
+              ingredients: { type: "array", items: { type: "string" } },
+              steps: { type: "array", items: { type: "string" } }
+            }
+          },
+          ja: {
+            type: "object",
+            required: ["name", "ingredients", "steps"],
+            properties: {
+              name: { type: "string" },
+              ingredients: { type: "array", items: { type: "string" } },
+              steps: { type: "array", items: { type: "string" } }
+            }
+          }
+        }
+      }
+    },
+    contents: [{ role: "user", parts: [{ text: prompt }] }]
+  };
+
+  const res = await fetchWithTimeout(ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    timeout: 30000
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.warn("[gemini] HTTP fail:", res.status, text || res.statusText);
+    if (res.status === 404) throw new Error(`[Gemini] Model not found on v1beta: "${MODEL}"`);
+    if (res.status === 403) throw new Error("[Gemini] Permission or quota issue (403). Check key & API enablement.");
+    throw new Error(`[Gemini] HTTP ${res.status}`);
+  }
+
+  const json = await res.json();
+  const txt = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const data = tryParseJson(txt);
+  if (!data) throw new Error("Failed to parse JSON from Gemini (multi).");
+
+  const byLang = {
+    ko: {
+      name: String(data?.ko?.name || "").trim(),
+      ingredients: Array.isArray(data?.ko?.ingredients) ? data.ko.ingredients.map(String) : [],
+      steps: Array.isArray(data?.ko?.steps) ? data.ko.steps.map(String) : []
+    },
+    en: {
+      name: String(data?.en?.name || "").trim(),
+      ingredients: Array.isArray(data?.en?.ingredients) ? data.en.ingredients.map(String) : [],
+      steps: Array.isArray(data?.en?.steps) ? data.en.steps.map(String) : []
+    },
+    ja: {
+      name: String(data?.ja?.name || "").trim(),
+      ingredients: Array.isArray(data?.ja?.ingredients) ? data.ja.ingredients.map(String) : [],
+      steps: Array.isArray(data?.ja?.steps) ? data.ja.steps.map(String) : []
+    }
+  };
+
+  return { byLang };
 }
 
 /** (옵션) 현재 키가 접근 가능한 모델 목록 점검용 */

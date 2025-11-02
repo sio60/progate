@@ -1,3 +1,4 @@
+// components/IngredientsSheet.jsx
 import React, { useMemo, useState } from "react";
 import {
   Modal,
@@ -10,8 +11,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useGlobalLang } from "./GlobalLang";
-// ⬇️ 백엔드 apiPost 제거, Gemini 호출기로 교체
-import { generateAiRecipe } from "../config/gemini";
+// ⬇️ 여기만 변경
+import { generateAiRecipeMulti } from "../config/gemini";
 
 const tMap = {
   ko: {
@@ -90,7 +91,7 @@ export default function IngredientsSheet({ visible, onClose }) {
   const [input, setInput] = useState("");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState([]); // [{ id, byLang: { ko, en, ja } }]
   const [err, setErr] = useState("");
 
   const addItem = () => {
@@ -117,31 +118,21 @@ export default function IngredientsSheet({ visible, onClose }) {
 
     try {
       setLoading(true);
-      // ✨ Gemini 직접 호출 (기본 servings=2, timeMax=60)
-      const ai = await generateAiRecipe({
+      // ✨ 한 번 호출로 ko/en/ja 동시 생성
+      const ai = await generateAiRecipeMulti({
         ingredients: items,
-        lang,
         servings: 2,
         timeMax: 60,
       });
 
-      const name = ai?.name?.trim();
-      const ingredients = Array.isArray(ai?.ingredientsText) ? ai.ingredientsText : [];
-      const steps = Array.isArray(ai?.steps) ? ai.steps : [];
-
-      if (!name || (!ingredients.length && !steps.length)) {
+      const byLang = ai?.byLang || {};
+      const view = byLang?.[lang] || byLang?.ko || {};
+      if (!view?.name || (!Array.isArray(view.ingredients) && !Array.isArray(view.steps))) {
         setErr(t.failGen);
         return;
       }
 
-      setResults([
-        {
-          id: 1,
-          name,
-          ingredients,
-          steps,
-        },
-      ]);
+      setResults([{ id: 1, byLang }]); // 저장만 해두고 렌더는 lang으로 선택
     } catch (e) {
       const msg =
         String(e?.name) === "AbortError"
@@ -172,7 +163,7 @@ export default function IngredientsSheet({ visible, onClose }) {
               onSubmitEditing={addItem}
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.addBtn} onPress={addItem}>
+            <TouchableOpacity style={styles.addBtn} onPress={addItem} disabled={loading}>
               <Text style={[styles.addTxt, { fontFamily: font }]}>{t.add}</Text>
             </TouchableOpacity>
           </View>
@@ -181,7 +172,7 @@ export default function IngredientsSheet({ visible, onClose }) {
             {items.map((v) => (
               <View key={v} style={styles.chip}>
                 <Text style={[styles.chipTxt, { fontFamily: font }]}>{v}</Text>
-                <TouchableOpacity onPress={() => removeItem(v)} style={styles.chipX}>
+                <TouchableOpacity onPress={() => removeItem(v)} style={styles.chipX} disabled={loading}>
                   <Text style={styles.chipXTxt}>×</Text>
                 </TouchableOpacity>
               </View>
@@ -209,37 +200,38 @@ export default function IngredientsSheet({ visible, onClose }) {
             <>
               <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
               <ScrollView style={styles.resultScroll} showsVerticalScrollIndicator={false}>
-                {results.map((r) => (
-                  <View key={r.id} style={styles.card}>
-                    <Text style={[styles.foodName, { fontFamily: font }]}>{r.name}</Text>
+                {results.map((r) => {
+                  const view = r?.byLang?.[lang] || r?.byLang?.ko || { name: "", ingredients: [], steps: [] };
+                  return (
+                    <View key={r.id} style={styles.card}>
+                      <Text style={[styles.foodName, { fontFamily: font }]}>{view.name}</Text>
 
-                    {!!r.ingredients?.length && (
-                      <>
-                        <Text style={[styles.sectionTitle, { fontFamily: font }]}>
-                          {t.ingredients}
-                        </Text>
-                        {r.ingredients.map((label, i) => (
-                          <View key={i} style={styles.liRow}>
-                            <Text style={[styles.bullet, { fontFamily: font }]}>•</Text>
-                            <ML text={label} style={[styles.liText, { fontFamily: font }]} />
-                          </View>
-                        ))}
-                      </>
-                    )}
+                      {!!view.ingredients?.length && (
+                        <>
+                          <Text style={[styles.sectionTitle, { fontFamily: font }]}>{t.ingredients}</Text>
+                          {view.ingredients.map((label, i) => (
+                            <View key={i} style={styles.liRow}>
+                              <Text style={[styles.bullet, { fontFamily: font }]}>•</Text>
+                              <ML text={label} style={[styles.liText, { fontFamily: font }]} />
+                            </View>
+                          ))}
+                        </>
+                      )}
 
-                    {!!r.steps?.length && (
-                      <>
-                        <Text style={[styles.sectionTitle, { fontFamily: font }]}>{t.steps}</Text>
-                        {r.steps.map((line, i) => (
-                          <View key={i} style={styles.stepRow}>
-                            <Text style={[styles.stepIdx, { fontFamily: font }]}>{i + 1}.</Text>
-                            <ML text={line} style={[styles.liText, { fontFamily: font }]} />
-                          </View>
-                        ))}
-                      </>
-                    )}
-                  </View>
-                ))}
+                      {!!view.steps?.length && (
+                        <>
+                          <Text style={[styles.sectionTitle, { fontFamily: font }]}>{t.steps}</Text>
+                          {view.steps.map((line, i) => (
+                            <View key={i} style={styles.stepRow}>
+                              <Text style={[styles.stepIdx, { fontFamily: font }]}>{i + 1}.</Text>
+                              <ML text={line} style={[styles.liText, { fontFamily: font }]} />
+                            </View>
+                          ))}
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
               </ScrollView>
             </>
           )}

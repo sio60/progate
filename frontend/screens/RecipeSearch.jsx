@@ -1,18 +1,13 @@
 // screens/RecipeSearch.jsx
 import React, { useMemo, useState, useCallback } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Keyboard,
+  View, Text, TextInput, TouchableOpacity,
+  ActivityIndicator, FlatList, StyleSheet, Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGlobalLang } from "../components/GlobalLang";
-import { searchRecipesByName } from "../config/api";
+// ⬇️ 서버 검색 대신 Gemini 직접 호출
+import { generateAiRecipeByName } from "../config/gemini";
 
 const tMap = {
   ko: {
@@ -60,20 +55,31 @@ export default function RecipeSearch() {
   const doSearch = useCallback(async () => {
     const keyword = q.trim();
     if (!keyword) return;
+
     setLoading(true);
     setError("");
     setList([]);
     Keyboard.dismiss();
+
     try {
-      const res = await searchRecipesByName(keyword, 30000);
-      setList(Array.isArray(res) ? res : []);
-      if (!res || res.length === 0) setError(t.empty);
+      const r = await generateAiRecipeByName({ dish: keyword, lang, servings: 2, timeMax: 60 });
+      // 컴포넌트는 배열 렌더에 맞춰 단건을 배열로 래핑
+      setList([{
+        title: r.title,
+        category: r.category,
+        timeMin: r.timeMin,
+        servings: r.servings,
+        difficulty: r.difficulty,
+        ingredients: r.ingredients,
+        steps: r.steps,
+      }]);
+      if (!r?.title && (!r?.ingredients?.length && !r?.steps?.length)) setError(t.empty);
     } catch (e) {
-      setError(e?.message || "검색에 실패했어요.");
+      setError(e?.message || t.empty);
     } finally {
       setLoading(false);
     }
-  }, [q, t.empty]);
+  }, [q, lang, t.empty]);
 
   const renderItem = ({ item }) => {
     return (
@@ -88,8 +94,7 @@ export default function RecipeSearch() {
         {Array.isArray(item.ingredients) && item.ingredients.length > 0 ? (
           item.ingredients.map((g, idx) => (
             <Text key={idx} style={styles.li}>
-              • {g.name}
-              {g.qty != null && g.unit ? ` — ${g.qty}${g.unit}` : ""}
+              • {g.name}{g.qty != null && g.unit ? ` — ${g.qty}${g.unit}` : ""}
             </Text>
           ))
         ) : (
@@ -132,9 +137,7 @@ export default function RecipeSearch() {
 
       {/* 목록 / 상태 */}
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="small" />
-        </View>
+        <View style={styles.center}><ActivityIndicator size="small" /></View>
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.dim}>{error}</Text>
