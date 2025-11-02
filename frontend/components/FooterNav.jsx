@@ -6,7 +6,9 @@ const { width } = Dimensions.get('window');
 const COL_WIDTH = Math.floor((width - 32) / 4);
 const FOOTER_FONT = { ko: 20, en: 10, ja: 10 };
 
-export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, onOpenBrowse, fontFamily }) {
+export default function FooterNav({
+  t, lang, onOpenSettings, onOpenIngredients, onOpenBrowse, onOpenSearch, fontFamily
+}) {
   return (
     <View style={styles.footer}>
       {/* 재료 입력 */}
@@ -17,8 +19,8 @@ export default function FooterNav({ t, lang, onOpenSettings, onOpenIngredients, 
         </Text>
       </TouchableOpacity>
 
-      {/* 레시피 검색 (추후 연결) */}
-      <TouchableOpacity style={styles.footerIcon}>
+      {/* 레시피 검색 */}
+      <TouchableOpacity style={styles.footerIcon} onPress={onOpenSearch}>
         <Image source={require('../assets/icons/search.png')} style={styles.iconImg} />
         <Text style={[styles.footerText, { fontFamily, fontSize: FOOTER_FONT[lang] }]} numberOfLines={2}>
           {t.navSearch}
