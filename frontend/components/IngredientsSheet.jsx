@@ -1,4 +1,3 @@
-// IngredientsSheet.jsx
 import React, { useMemo, useState } from "react";
 import {
   Modal,
@@ -11,7 +10,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useGlobalLang } from "./GlobalLang";
-import { apiPost } from "../config/api";
+// ⬇️ 백엔드 apiPost 제거, Gemini 호출기로 교체
+import { generateAiRecipe } from "../config/gemini";
 
 const tMap = {
   ko: {
@@ -27,7 +27,7 @@ const tMap = {
     steps: "조리 과정",
     failGen: "레시피를 만들지 못했어요. 재시도 해보세요.",
     timeout: "요청이 시간 초과됐어요(30s). 서버 지연 또는 IP 설정 확인",
-    netFail: "연결 실패: API_BASE/IP/방화벽 확인",
+    netFail: "연결 실패: 네트워크/키 설정 확인",
   },
   en: {
     title: "Add Ingredients",
@@ -41,8 +41,8 @@ const tMap = {
     ingredients: "Ingredients",
     steps: "Steps",
     failGen: "Couldn't build a recipe. Please try again.",
-    timeout: "Request timed out (30s). Server slow or wrong IP",
-    netFail: "Network failed: check API_BASE/IP/firewall",
+    timeout: "Request timed out (30s). Check network or key",
+    netFail: "Network failed: check connectivity/API key",
   },
   ja: {
     title: "材料入力",
@@ -56,8 +56,8 @@ const tMap = {
     ingredients: "材料",
     steps: "作り方",
     failGen: "レシピを作成できませんでした。再試行してください。",
-    timeout: "タイムアウト(30秒)。サーバ遅延またはIP設定を確認",
-    netFail: "接続失敗: API/IP/Firewallを確認",
+    timeout: "タイムアウト(30秒)。ネットワーク/キーを確認",
+    netFail: "接続失敗: ネットワーク/キー確認",
   },
 };
 
@@ -83,234 +83,6 @@ function ML({ text, style }) {
   );
 }
 
-/* ── 수량/단위 포맷/파서 (프론트에서 라벨 만들기용) ─────────────────── */
-const fmtQty = (n) => {
-  if (n == null || isNaN(n)) return "";
-  return (Math.round(Number(n) * 10) / 10).toFixed(1);
-};
-// 단위 정규화 + kg→g 변환
-const normalizeUnitAndQty = (qty, unit) => {
-  let q = qty;
-  let u = (unit || "").toString().trim().toLowerCase();
-
-  const U = {
-    l: "L",
-    liter: "L",
-    litres: "L",
-    liters: "L",
-    리터: "L",
-
-    ml: "ml",
-    milliliter: "ml",
-    milliliters: "ml",
-    밀리리터: "ml",
-
-    cup: "컵",
-    cups: "컵",
-    컵: "컵",
-
-    tbsp: "큰술",
-    tbs: "큰술",
-    tablespoon: "큰술",
-    tablespoons: "큰술",
-    t: "큰술",
-    "큰 술": "큰술",
-    큰술: "큰술",
-
-    tsp: "작은술",
-    teaspoon: "작은술",
-    teaspoons: "작은술",
-    "작은 술": "작은술",
-    작은술: "작은술",
-
-    g: "g",
-    gram: "g",
-    grams: "g",
-    그램: "g",
-
-    kg: "kg",
-    kilogram: "kg",
-    kilograms: "kg",
-    킬로그램: "kg",
-
-    ea: "개",
-    pc: "개",
-    pcs: "개",
-    piece: "개",
-    pieces: "개",
-    개: "개",
-
-    pinch: "꼬집",
-    꼬집: "꼬집",
-  };
-  if (U[u]) u = U[u];
-
-  if (u === "kg") {
-    q = Number(q) * 1000;
-    u = "g";
-  }
-  return { qty: Number(q), unit: u };
-};
-// qty+unit 문구
-const fmtQtyAndUnit = (qty, unit) => {
-  if (qty == null) return "";
-  const { qty: q, unit: u } = normalizeUnitAndQty(Number(qty), unit);
-  if (u === "ml") return q >= 1000 ? `${fmtQty(q / 1000)} L` : `${fmtQty(q)} ml`;
-  if (u === "컵") {
-    const ml = q * 200;
-    return ml >= 1000 ? `${fmtQty(ml / 1000)} L` : `${fmtQty(ml)} ml`;
-  }
-  if (u === "L") return `${fmtQty(q)} L`;
-  return `${fmtQty(q)} ${u || ""}`.trim();
-};
-// 문자열에서 수치/단위 추출
-const fractionToFloat = (s) => {
-  if (!s) return null;
-  const map = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
-  if (map[s] != null) return map[s];
-  const str = String(s).trim();
-  const mix = str.match(/^(\d+)\s+(\d+)\/(\d+)$/);
-  if (mix) return parseFloat(mix[1]) + parseFloat(mix[2]) / parseFloat(mix[3]);
-  const frac = str.match(/^(\d+)\/(\d+)$/);
-  if (frac) return parseFloat(frac[1]) / parseFloat(frac[2]);
-  const num = Number(str.replace(",", "."));
-  return isNaN(num) ? null : num;
-};
-const parseIngredientLine = (s) => {
-  if (!s) return null;
-  const line = s
-    .replace(/[•·\-–—]/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(/\([^)]*\)/g, "")
-    .trim();
-
-  const N = "(?:\\d+(?:[.,]\\d+)?|\\d+\\s+\\d+/\\d+|\\d+/\\d+|[½¼¾⅓⅔])";
-  const U =
-    "(L|l|리터|ml|밀리리터|컵|cups?|cup|큰\\s*술|큰술|tbsp|tbs|T|작은\\s*술|작은술|tsp|teaspoons?|teaspoon|g|그램|kg|킬로그램|ea|pcs?|piece|pieces|개|pinch|꼬집)";
-  let m = line.match(new RegExp(`^(.*?)\\s*(${N})\\s*${U}\\s*$`, "i"));
-  if (!m) {
-    m = line.match(new RegExp(`^(${N})\\s*${U}\\s*(.+)$`, "i"));
-    if (m) {
-      const num = fractionToFloat(m[1].replace(",", "."));
-      const unit = m[2];
-      const name = m[3].trim();
-      const { qty, unit: u } = normalizeUnitAndQty(num, unit);
-      return { name, qty, unit: u };
-    }
-  } else {
-    const name = m[1].trim();
-    const num = fractionToFloat(m[2].replace(",", "."));
-    const unit = m[3];
-    const { qty, unit: u } = normalizeUnitAndQty(num, unit);
-    return { name, qty, unit: u };
-  }
-  return { name: line, qty: null, unit: "" };
-};
-// 객체여도 없으면 name에서 다시 뽑기
-const ensureMeasured = (i) => {
-  if (!i) return i;
-  let { name, qty, unit } = i;
-  if (qty == null || !unit) {
-    const p = parseIngredientLine(name);
-    if (p?.qty != null) {
-      name = p.name || name;
-      qty = p.qty;
-      unit = p.unit;
-    }
-  } else {
-    const n = normalizeUnitAndQty(qty, unit);
-    qty = n.qty;
-    unit = n.unit;
-  }
-  return { name, qty, unit };
-};
-
-/* ── 단계 텍스트 분해 ───────────────────────────────────────────── */
-function tokenizeSteps(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((s) => (typeof s === "string" ? s : s?.text))
-      .filter(Boolean)
-      .map((s) => s.trim());
-  }
-  if (typeof value === "string") {
-    const cleaned = normalizeLB(value);
-    let parts = cleaned.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 1) {
-      parts = parts.map((s) => s.replace(/^\s*\d+[\.\)\-\s]\s*/, "").trim());
-    } else if (/\d+[\.\)\-]\s/.test(cleaned)) {
-      parts = cleaned
-        .replace(/^\s*\d+[\.\)\-]\s*/, "")
-        .split(/\s+\d+[\.\)\-]\s+/g)
-        .map((s) => s.trim())
-        .filter(Boolean);
-    } else {
-      parts = cleaned
-        .split(/(?<=\.)\s+(?=[가-힣A-Za-z0-9])/g)
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
-    return parts;
-  }
-  return [];
-}
-
-/* ── 응답 정규화: 재료는 '라벨 문자열' 배열로 변환 ─────────────────── */
-const buildLabel = (name, qty, unit, fallbackLabel) => {
-  if (fallbackLabel && String(fallbackLabel).trim()) return String(fallbackLabel).trim();
-  const q = fmtQtyAndUnit(qty, unit);
-  return q ? `${name} ${q}`.trim() : name?.trim() || "";
-};
-
-const normalizeResult = (raw, idx = 0) => {
-  const name = raw?.title || raw?.food || raw?.name || "(제목 없음)";
-
-  // 재료 → 문자열 라벨 배열
-  let ingredients = [];
-  if (Array.isArray(raw?.ingredients)) {
-    ingredients = raw.ingredients
-      .map((i) => {
-        if (!i) return null;
-        if (typeof i === "string") {
-          const p = ensureMeasured(parseIngredientLine(i));
-          return buildLabel(p.name, p.qty, p.unit);
-        }
-        const base = {
-          name: i.name ?? i.item ?? "",
-          qty:
-            typeof i.qty === "number"
-              ? i.qty
-              : i.qty
-              ? fractionToFloat(String(i.qty))
-              : null,
-          unit: i.unit ?? "",
-          label: i.label, // 혹시 모델이 label을 보냈다면 우선 사용
-        };
-        const fixed = ensureMeasured(base);
-        return buildLabel(fixed.name, fixed.qty, fixed.unit, base.label);
-      })
-      .filter((s) => s && s.trim());
-  }
-  if (!ingredients.length && typeof raw?.ingredient === "string") {
-    ingredients = raw.ingredient
-      .split(/\r?\n|,|·|•/g)
-      .map((s) => {
-        const p = ensureMeasured(parseIngredientLine(s));
-        return buildLabel(p.name, p.qty, p.unit);
-      })
-      .filter(Boolean);
-  }
-
-  // 단계
-  let steps = [];
-  if (raw?.steps != null) steps = tokenizeSteps(raw.steps);
-  else if (raw?.recipe != null) steps = tokenizeSteps(raw.recipe);
-
-  return { id: idx + 1, name, ingredients, steps };
-};
-
-/* ── 컴포넌트 ───────────────────────────────────────────────────── */
 export default function IngredientsSheet({ visible, onClose }) {
   const { lang, font } = useGlobalLang();
   const t = useMemo(() => tMap[lang] ?? tMap.ko, [lang]);
@@ -345,26 +117,36 @@ export default function IngredientsSheet({ visible, onClose }) {
 
     try {
       setLoading(true);
-      const data = await apiPost("/api/recipes/prepare", { ingredients: items });
-      const arr = Array.isArray(data) ? data : [data];
-      const norm = arr
-        .map((it, idx) => normalizeResult(it, idx))
-        .filter(
-          (r) =>
-            (r.ingredients?.length || r.steps?.length) &&
-            r.name !== "(제목 없음)"
-        );
+      // ✨ Gemini 직접 호출 (기본 servings=2, timeMax=60)
+      const ai = await generateAiRecipe({
+        ingredients: items,
+        lang,
+        servings: 2,
+        timeMax: 60,
+      });
 
-      if (!norm.length) {
+      const name = ai?.name?.trim();
+      const ingredients = Array.isArray(ai?.ingredientsText) ? ai.ingredientsText : [];
+      const steps = Array.isArray(ai?.steps) ? ai.steps : [];
+
+      if (!name || (!ingredients.length && !steps.length)) {
         setErr(t.failGen);
         return;
       }
-      setResults(norm);
+
+      setResults([
+        {
+          id: 1,
+          name,
+          ingredients,
+          steps,
+        },
+      ]);
     } catch (e) {
       const msg =
         String(e?.name) === "AbortError"
           ? t.timeout
-          : String(e?.message || "").includes("Network request failed")
+          : /Network request failed|Failed to fetch/i.test(String(e?.message || ""))
           ? t.netFail
           : t.failGen;
       setErr(msg);
@@ -426,7 +208,7 @@ export default function IngredientsSheet({ visible, onClose }) {
           {!!results.length && (
             <>
               <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
-              <ScrollView style={styles.resultScroll}>
+              <ScrollView style={styles.resultScroll} showsVerticalScrollIndicator={false}>
                 {results.map((r) => (
                   <View key={r.id} style={styles.card}>
                     <Text style={[styles.foodName, { fontFamily: font }]}>{r.name}</Text>

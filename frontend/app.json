@@ -25,7 +25,7 @@
 
     "extra": {
       "EXPO_PUBLIC_API_BASE_MAIN": "http://192.168.219.57:8080",
-      "EXPO_PUBLIC_API_BASE_YT":   "http://192.168.219.58:8080"
+      "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyBp1Z9GJpqhztrMZPq9ni2dVf3m6lggR7o"
     }
   }
 }
