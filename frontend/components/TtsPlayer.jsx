@@ -1,4 +1,3 @@
-// components/TtsPlayer.jsx
 import React, { useEffect, useMemo, useRef } from "react";
 import { Platform } from "react-native";
 import * as Speech from "expo-speech";
