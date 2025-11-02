@@ -10,6 +10,6 @@ export default function HeaderLogo({ source = require('../assets/icons/home.png'
 }
 
 const styles = StyleSheet.create({
-  logoWrapper: { alignItems: 'center', marginBottom: 2, marginTop: -10 },
+  logoWrapper: { alignItems: 'center', marginBottom: 2, marginTop: 10 },
   logo: { width: 120, height: 120, resizeMode: 'contain' },
 });
