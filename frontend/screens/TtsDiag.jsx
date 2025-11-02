@@ -1,4 +1,3 @@
-// screens/TtsDiag.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, TextInput } from "react-native";
 import * as Speech from "expo-speech";

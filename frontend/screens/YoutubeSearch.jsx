@@ -1,4 +1,3 @@
-// screens/YoutubeSearch.jsx
 import React, { useMemo, useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, FlatList, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

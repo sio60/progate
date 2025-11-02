@@ -1,74 +1,35 @@
 // components/IngredientsSheet.jsx
 import React, { useMemo, useState } from "react";
 import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
+  Modal, View, Text, TextInput, TouchableOpacity,
+  StyleSheet, ScrollView, ActivityIndicator,
 } from "react-native";
 import { useGlobalLang } from "./GlobalLang";
-// ⬇️ 여기만 변경
 import { generateAiRecipeMulti } from "../config/gemini";
 
 const tMap = {
-  ko: {
-    title: "재료 입력",
-    placeholder: "예) 김치",
-    add: "추가",
-    generate: "추천받기",
-    reset: "초기화",
-    close: "닫기",
-    empty: "재료를 1개 이상 입력하세요.",
-    result: "생성 결과",
-    ingredients: "재료",
-    steps: "조리 과정",
-    failGen: "레시피를 만들지 못했어요. 재시도 해보세요.",
-    timeout: "요청이 시간 초과됐어요(30s). 서버 지연 또는 IP 설정 확인",
-    netFail: "연결 실패: 네트워크/키 설정 확인",
-  },
-  en: {
-    title: "Add Ingredients",
-    placeholder: "e.g., kimchi",
-    add: "Add",
-    generate: "Generate",
-    reset: "Reset",
-    close: "Close",
-    empty: "Please add at least one ingredient.",
-    result: "Results",
-    ingredients: "Ingredients",
-    steps: "Steps",
-    failGen: "Couldn't build a recipe. Please try again.",
-    timeout: "Request timed out (30s). Check network or key",
-    netFail: "Network failed: check connectivity/API key",
-  },
-  ja: {
-    title: "材料入力",
-    placeholder: "例) キムチ",
-    add: "追加",
-    generate: "提案を受ける",
-    reset: "リセット",
-    close: "閉じる",
-    empty: "材料を1つ以上入力してください。",
-    result: "生成結果",
-    ingredients: "材料",
-    steps: "作り方",
-    failGen: "レシピを作成できませんでした。再試行してください。",
-    timeout: "タイムアウト(30秒)。ネットワーク/キーを確認",
-    netFail: "接続失敗: ネットワーク/キー確認",
-  },
+  ko: { title: "재료 입력", placeholder: "예) 김치", add: "추가", generate: "추천받기", reset: "초기화", close: "닫기",
+        empty: "재료를 1개 이상 입력하세요.", result: "생성 결과", listen: "음성으로 듣기 →",
+        ingredients: "재료", steps: "조리 과정",
+        failGen: "레시피를 만들지 못했어요. 재시도 해보세요.",
+        timeout: "요청이 시간 초과됐어요(30s). 서버 지연 또는 IP 설정 확인",
+        netFail: "연결 실패: 네트워크/키 설정 확인" },
+  en: { title: "Add Ingredients", placeholder: "e.g., kimchi", add: "Add", generate: "Generate", reset: "Reset", close: "Close",
+        empty: "Please add at least one ingredient.", result: "Results", listen: "Listen →",
+        ingredients: "Ingredients", steps: "Steps",
+        failGen: "Couldn't build a recipe. Please try again.",
+        timeout: "Request timed out (30s). Check network or key",
+        netFail: "Network failed: check connectivity/API key" },
+  ja: { title: "材料入力", placeholder: "例) キムチ", add: "追加", generate: "提案を受ける", reset: "リセット", close: "閉じる",
+        empty: "材料を1つ以上入力してください。", result: "生成結果", listen: "音声で聞く →",
+        ingredients: "材料", steps: "作り方",
+        failGen: "レシピを作成できませんでした。再試行してください。",
+        timeout: "タイムアウト(30秒)。ネットワーク/キーを確認",
+        netFail: "接続失敗: ネットワーク/キー確認" },
 };
 
-/* ── 유틸: 개행 정규화 + 멀티라인 렌더러 ─────────────────────────── */
 const normalizeLB = (s = "") =>
-  String(s)
-    .replace(/\r\n?/g, "\n")
-    .replace(/\u2028|\u2029/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  String(s).replace(/\r\n?/g, "\n").replace(/\u2028|\u2029/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 
 function ML({ text, style }) {
   const parts = normalizeLB(text).split("\n");
@@ -76,22 +37,21 @@ function ML({ text, style }) {
     <Text style={style}>
       {parts.map((p, i) => (
         <Text key={i}>
-          {p}
-          {i < parts.length - 1 ? "\n" : ""}
+          {p}{i < parts.length - 1 ? "\n" : ""}
         </Text>
       ))}
     </Text>
   );
 }
 
-export default function IngredientsSheet({ visible, onClose }) {
+export default function IngredientsSheet({ visible, onClose, navigate }) {
   const { lang, font } = useGlobalLang();
   const t = useMemo(() => tMap[lang] ?? tMap.ko, [lang]);
 
   const [input, setInput] = useState("");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]); // [{ id, byLang: { ko, en, ja } }]
+  const [results, setResults] = useState([]); // [{ id, byLang }]
   const [err, setErr] = useState("");
 
   const addItem = () => {
@@ -101,49 +61,42 @@ export default function IngredientsSheet({ visible, onClose }) {
     setInput("");
   };
   const removeItem = (v) => setItems((prev) => prev.filter((x) => x !== v));
-  const resetAll = () => {
-    setItems([]);
-    setResults([]);
-    setErr("");
-    setInput("");
-  };
+  const resetAll = () => { setItems([]); setResults([]); setErr(""); setInput(""); };
 
   const requestRecipes = async () => {
-    setErr("");
-    setResults([]);
-    if (!items.length) {
-      setErr(t.empty);
-      return;
-    }
+    setErr(""); setResults([]);
+    if (!items.length) { setErr(t.empty); return; }
 
     try {
       setLoading(true);
-      // ✨ 한 번 호출로 ko/en/ja 동시 생성
-      const ai = await generateAiRecipeMulti({
-        ingredients: items,
-        servings: 2,
-        timeMax: 60,
-      });
-
+      const ai = await generateAiRecipeMulti({ ingredients: items, servings: 2, timeMax: 60 });
       const byLang = ai?.byLang || {};
       const view = byLang?.[lang] || byLang?.ko || {};
       if (!view?.name || (!Array.isArray(view.ingredients) && !Array.isArray(view.steps))) {
-        setErr(t.failGen);
-        return;
+        setErr(t.failGen); return;
       }
-
-      setResults([{ id: 1, byLang }]); // 저장만 해두고 렌더는 lang으로 선택
+      setResults([{ id: 1, byLang }]);
     } catch (e) {
-      const msg =
-        String(e?.name) === "AbortError"
-          ? t.timeout
-          : /Network request failed|Failed to fetch/i.test(String(e?.message || ""))
-          ? t.netFail
-          : t.failGen;
+      const msg = String(e?.name) === "AbortError" ? t.timeout
+        : /Network request failed|Failed to fetch/i.test(String(e?.message || "")) ? t.netFail
+        : t.failGen;
       setErr(msg);
       console.warn("[💥 에러]", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ▶️ 조리 과정만 TTS로 보냄
+  const goListen = () => {
+    if (!results.length) return;
+    const v = results[0]?.byLang?.[lang] || results[0]?.byLang?.ko || { steps: [] };
+    const stepsOnly = Array.isArray(v.steps) ? v.steps.map(String) : [];
+    if (!stepsOnly.length) return;
+
+    if (typeof navigate === "function") {
+      // 조리 과정만 + 읽는 언어
+      navigate("TtsRead", { steps: stepsOnly, ttsLang: lang });
     }
   };
 
@@ -198,7 +151,13 @@ export default function IngredientsSheet({ visible, onClose }) {
 
           {!!results.length && (
             <>
-              <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
+              <View style={styles.resultHeader}>
+                <Text style={[styles.resultTitle, { fontFamily: font }]}>{t.result}</Text>
+                <TouchableOpacity style={styles.listenBtn} onPress={goListen}>
+                  <Text style={[styles.listenTxt, { fontFamily: font }]}>{t.listen}</Text>
+                </TouchableOpacity>
+              </View>
+
               <ScrollView style={styles.resultScroll} showsVerticalScrollIndicator={false}>
                 {results.map((r) => {
                   const view = r?.byLang?.[lang] || r?.byLang?.ko || { name: "", ingredients: [], steps: [] };
@@ -265,7 +224,12 @@ const styles = StyleSheet.create({
   genBtnDisabled: { opacity: 0.5 },
   genTxt: { color: "#fff", fontSize: 15 },
   err: { marginTop: 8, color: "#d22" },
-  resultTitle: { marginTop: 16, fontSize: 16 },
+
+  resultHeader: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  resultTitle: { fontSize: 16 },
+  listenBtn: { backgroundColor: "#111", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  listenTxt: { color: "#fff", fontSize: 13 },
+
   resultScroll: { marginTop: 8, maxHeight: 360 },
   card: { borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, marginBottom: 12, backgroundColor: "#fff" },
   foodName: { fontSize: 18, marginBottom: 6, color: "#111" },

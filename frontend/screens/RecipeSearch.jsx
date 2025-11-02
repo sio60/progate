@@ -1,12 +1,10 @@
-// screens/RecipeSearch.jsx
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, FlatList, StyleSheet, Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGlobalLang } from "../components/GlobalLang";
-// ⬇️ 서버 검색 대신 Gemini 직접 호출
 import { generateAiRecipeByName } from "../config/gemini";
 
 const tMap = {
@@ -63,7 +61,6 @@ export default function RecipeSearch() {
 
     try {
       const r = await generateAiRecipeByName({ dish: keyword, lang, servings: 2, timeMax: 60 });
-      // 컴포넌트는 배열 렌더에 맞춰 단건을 배열로 래핑
       setList([{
         title: r.title,
         category: r.category,
@@ -81,11 +78,19 @@ export default function RecipeSearch() {
     }
   }, [q, lang, t.empty]);
 
+  // 언어 변경 시, 검색어/결과가 있으면 자동 재검색
+  useEffect(() => {
+    if (q.trim() && list.length && !loading) {
+      doSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
   const renderItem = ({ item }) => {
     return (
       <View style={styles.card}>
         <Text style={[styles.title, { fontFamily: font }]}>{item.title}</Text>
-        <Text style={styles.meta}>
+        <Text style={[styles.meta, { fontFamily: font }]}>
           {t.meta(item.category, item.timeMin, item.servings, item.difficulty)}
         </Text>
 
@@ -93,24 +98,24 @@ export default function RecipeSearch() {
         <Text style={[styles.section, { fontFamily: font }]}>{t.ingredients}</Text>
         {Array.isArray(item.ingredients) && item.ingredients.length > 0 ? (
           item.ingredients.map((g, idx) => (
-            <Text key={idx} style={styles.li}>
+            <Text key={idx} style={[styles.li, { fontFamily: font }]}>
               • {g.name}{g.qty != null && g.unit ? ` — ${g.qty}${g.unit}` : ""}
             </Text>
           ))
         ) : (
-          <Text style={styles.dim}>-</Text>
+          <Text style={[styles.dim, { fontFamily: font }]}>-</Text>
         )}
 
         {/* 조리 과정 */}
         <Text style={[styles.section, { fontFamily: font, marginTop: 12 }]}>{t.steps}</Text>
         {Array.isArray(item.steps) && item.steps.length > 0 ? (
           item.steps.map((s, idx) => (
-            <Text key={idx} style={styles.li}>
+            <Text key={idx} style={[styles.li, { fontFamily: font }]}>
               {`${s.order ?? idx + 1}. ${s.text}`}
             </Text>
           ))
         ) : (
-          <Text style={styles.dim}>-</Text>
+          <Text style={[styles.dim, { fontFamily: font }]}>-</Text>
         )}
       </View>
     );
@@ -140,7 +145,7 @@ export default function RecipeSearch() {
         <View style={styles.center}><ActivityIndicator size="small" /></View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.dim}>{error}</Text>
+          <Text style={[styles.dim, { fontFamily: font }]}>{error}</Text>
           <TouchableOpacity style={[styles.btn, { marginTop: 8 }]} onPress={doSearch}>
             <Text style={[styles.btnText, { fontFamily: font }]}>{t.retry}</Text>
           </TouchableOpacity>
@@ -151,7 +156,11 @@ export default function RecipeSearch() {
           keyExtractor={(_, i) => String(i)}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 24 }}
-          ListEmptyComponent={<Text style={[styles.dim, { textAlign: "center", marginTop: 24 }]}>{t.empty}</Text>}
+          ListEmptyComponent={
+            <Text style={[styles.dim, { textAlign: "center", marginTop: 24, fontFamily: font }]}>
+              {t.empty}
+            </Text>
+          }
         />
       )}
     </View>
@@ -167,8 +176,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#eee",
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, fontSize: 15, backgroundColor: "#fafafa",
   },
-  btn: { backgroundColor: "#ffe98a", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
-  btnText: { fontSize: 15 },
+  btn: { backgroundColor: "#111", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
+  btnText: { fontSize: 15, color: "#fff" },
   center: { alignItems: "center", justifyContent: "center", paddingTop: 24 },
   card: {
     borderWidth: 1, borderColor: "#f2f2f2", borderRadius: 14, padding: 14, marginBottom: 12,
